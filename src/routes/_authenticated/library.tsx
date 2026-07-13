@@ -102,14 +102,14 @@ function LibraryPage() {
         <FilterChip
           label="All"
           active={!status}
-          onClick={() => navigate({ search: (p) => ({ ...p, status: undefined }), replace: true })}
+          onClick={() => navigate({ search: (p: Record<string, unknown>) => ({ ...p, status: undefined }), replace: true })}
         />
         {(["draft", "under_review", "approved", "archived"] as const).map((s) => (
           <FilterChip
             key={s}
             label={s.replace("_", " ")}
             active={status === s}
-            onClick={() => navigate({ search: (p) => ({ ...p, status: s }), replace: true })}
+            onClick={() => navigate({ search: (p: Record<string, unknown>) => ({ ...p, status: s }), replace: true })}
           />
         ))}
         <div className="flex-1" />

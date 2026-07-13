@@ -392,8 +392,9 @@ function UploadModal({
               options={[
                 { value: "public", label: "Public" },
                 { value: "internal", label: "Internal" },
-                { value: "restricted", label: "Restricted" },
+                { value: "department", label: "Department" },
                 { value: "confidential", label: "Confidential" },
+                { value: "strictly_confidential", label: "Strictly confidential" },
               ]} />
           </div>
           <div className="flex justify-end gap-2 pt-2">

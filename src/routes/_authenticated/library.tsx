@@ -305,7 +305,7 @@ function UploadModal({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [deptId, setDeptId] = useState<string>(defaultDeptId ?? departments[0]?.id ?? "");
-  const [confidentiality, setConfidentiality] = useState<"public" | "internal" | "restricted" | "confidential">("internal");
+  const [confidentiality, setConfidentiality] = useState<"public" | "internal" | "department" | "confidential" | "strictly_confidential">("internal");
   const [uploading, setUploading] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {

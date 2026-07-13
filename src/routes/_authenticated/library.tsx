@@ -38,12 +38,12 @@ function LibraryPage() {
     [departments, dept],
   );
 
-  const { data: documents = [], isLoading } = useQuery({
+  const { data: documents = [], isLoading } = useQuery<DocRow[]>({
     queryKey: ["documents", { q, deptId, status }],
     queryFn: async () => {
       let query = supabase
         .from("documents")
-        .select("*, departments(name, code, color), profiles!documents_owner_id_fkey(full_name)")
+        .select("*, departments(name, code, color)")
         .order("updated_at", { ascending: false })
         .limit(200);
       if (deptId) query = query.eq("department_id", deptId);
@@ -51,7 +51,7 @@ function LibraryPage() {
       if (q && q.trim()) query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%,keywords.ilike.%${q}%`);
       const { data, error } = await query;
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as DocRow[];
     },
   });
 

@@ -81,7 +81,7 @@ function LibraryPage() {
             defaultValue={q ?? ""}
             onChange={(e) => {
               const v = e.target.value;
-              navigate({ search: (prev) => ({ ...prev, q: v || undefined }), replace: true });
+              navigate({ search: (prev: typeof Route.types.searchSchemaInput) => ({ ...prev, q: v || undefined }), replace: true });
             }}
             placeholder="Search documents, keywords, tags…"
             className="w-full pl-8 pr-3 py-1.5 bg-background border border-input rounded-sm text-sm outline-none focus:border-primary focus:ring-2 focus:ring-ring"

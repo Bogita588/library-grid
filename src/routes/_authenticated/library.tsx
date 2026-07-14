@@ -184,10 +184,30 @@ type DocRow = {
   profiles?: { full_name: string | null } | null;
 };
 
+async function downloadCurrent(docId: string) {
+  const { data: v, error } = await supabase
+    .from("document_versions")
+    .select("storage_path, file_name")
+    .eq("document_id", docId)
+    .order("version_number", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !v) { toast.error("No file to download"); return; }
+  const { data: signed, error: sErr } = await supabase.storage
+    .from("documents")
+    .createSignedUrl(v.storage_path, 60, { download: v.file_name });
+  if (sErr || !signed) { toast.error("Could not create download link"); return; }
+  window.open(signed.signedUrl, "_blank");
+}
+
 function DocCard({ doc }: { doc: DocRow }) {
   const color = doc.departments?.color ?? "oklch(0.52 0.19 258)";
   return (
-    <div className="group bg-card border border-border rounded-sm p-4 hover:border-primary/50 hover:shadow-sm transition-all animate-reveal">
+    <Link
+      to="/library/$docId"
+      params={{ docId: doc.id }}
+      className="group bg-card border border-border rounded-sm p-4 hover:border-primary/50 hover:shadow-sm transition-all animate-reveal block"
+    >
       <div className="flex items-start justify-between mb-3">
         <div
           className="h-8 w-8 flex items-center justify-center rounded-sm"
@@ -214,12 +234,20 @@ function DocCard({ doc }: { doc: DocRow }) {
         {doc.confidentiality !== "public" && (
           <Shield className="h-2.5 w-2.5 text-accent" />
         )}
+        <button
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); downloadCurrent(doc.id); }}
+          title="Download"
+          className="opacity-0 group-hover:opacity-100 transition-opacity hover:text-foreground"
+        >
+          <Download className="h-3 w-3" />
+        </button>
       </div>
-    </div>
+    </Link>
   );
 }
 
 function DocTable({ docs }: { docs: DocRow[] }) {
+  const navigate = useNavigate();
   return (
     <div className="bg-card border border-border rounded-sm overflow-hidden">
       <table className="w-full text-sm">
@@ -231,11 +259,16 @@ function DocTable({ docs }: { docs: DocRow[] }) {
             <th className="text-left px-4 py-2 font-medium">Status</th>
             <th className="text-left px-4 py-2 font-medium">Ver</th>
             <th className="text-left px-4 py-2 font-medium">Updated</th>
+            <th className="w-10"></th>
           </tr>
         </thead>
         <tbody>
           {docs.map((d) => (
-            <tr key={d.id} className="border-b border-border last:border-0 hover:bg-muted/30">
+            <tr
+              key={d.id}
+              onClick={() => navigate({ to: "/library/$docId", params: { docId: d.id } })}
+              className="border-b border-border last:border-0 hover:bg-muted/30 cursor-pointer"
+            >
               <td className="px-4 py-2.5 font-mono text-[11px] text-muted-foreground">{d.document_number ?? "—"}</td>
               <td className="px-4 py-2.5 font-medium">{d.title}</td>
               <td className="px-4 py-2.5 text-xs text-muted-foreground">{d.departments?.code}</td>
@@ -243,6 +276,15 @@ function DocTable({ docs }: { docs: DocRow[] }) {
               <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">V{d.current_version}</td>
               <td className="px-4 py-2.5 text-xs text-muted-foreground">
                 {new Date(d.updated_at).toLocaleDateString()}
+              </td>
+              <td className="px-4 py-2.5 text-right">
+                <button
+                  onClick={(e) => { e.stopPropagation(); downloadCurrent(d.id); }}
+                  title="Download"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                </button>
               </td>
             </tr>
           ))}

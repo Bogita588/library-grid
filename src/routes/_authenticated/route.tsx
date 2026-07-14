@@ -73,9 +73,15 @@ function AuthenticatedLayout() {
         </div>
 
         <nav className="flex-1 overflow-y-auto p-3 space-y-6">
-          <NavSection label="Library">
+          <NavSection label="Workspace">
+            <NavItem to="/dashboard" active={pathname === "/dashboard"} icon={LayoutDashboard}>
+              Dashboard
+            </NavItem>
             <NavItem to="/library" active={pathname === "/library"} icon={LayoutGrid}>
               All documents
+            </NavItem>
+            <NavItem to="/favorites" active={pathname === "/favorites"} icon={Star}>
+              Favorites
             </NavItem>
           </NavSection>
 

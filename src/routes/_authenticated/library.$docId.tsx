@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  ArrowLeft, Download, FileText, Loader2, Shield, Upload, History, Trash2,
+  ArrowLeft, Download, FileText, Loader2, Shield, Upload, History, Trash2, Star,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -56,6 +56,33 @@ function DocumentPage() {
   });
 
   const currentVersion = versions[0];
+
+  const { data: favorite } = useQuery({
+    queryKey: ["favorite", docId],
+    queryFn: async () => {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return null;
+      const { data } = await supabase
+        .from("favorites")
+        .select("id")
+        .eq("user_id", userData.user.id)
+        .eq("document_id", docId)
+        .maybeSingle();
+      return data;
+    },
+  });
+
+  async function toggleFavorite() {
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) return;
+    if (favorite) {
+      await supabase.from("favorites").delete().eq("id", favorite.id);
+    } else {
+      await supabase.from("favorites").insert({ user_id: userData.user.id, document_id: docId });
+    }
+    qc.invalidateQueries({ queryKey: ["favorite", docId] });
+    qc.invalidateQueries({ queryKey: ["favorites"] });
+  }
 
   // Sign the current version for preview
   useEffect(() => {
@@ -195,6 +222,14 @@ function DocumentPage() {
             <Download className="h-3.5 w-3.5" /> Download
           </button>
         )}
+
+        <button
+          onClick={toggleFavorite}
+          title={favorite ? "Unpin" : "Pin to favorites"}
+          className="inline-flex items-center gap-1.5 rounded-sm border border-input px-2 py-1.5 text-xs hover:bg-muted"
+        >
+          <Star className={`h-3.5 w-3.5 ${favorite ? "fill-warning text-warning" : "text-muted-foreground"}`} />
+        </button>
 
         <button
           onClick={deleteDocument}

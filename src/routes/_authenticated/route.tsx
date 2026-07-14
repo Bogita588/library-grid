@@ -8,7 +8,7 @@ import {
 } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { LayoutGrid, Users, LogOut, Search, FolderTree, Shield } from "lucide-react";
+import { LayoutGrid, Users, LogOut, Search, FolderTree, Shield, LayoutDashboard, Star } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated")({
@@ -73,9 +73,15 @@ function AuthenticatedLayout() {
         </div>
 
         <nav className="flex-1 overflow-y-auto p-3 space-y-6">
-          <NavSection label="Library">
+          <NavSection label="Workspace">
+            <NavItem to="/dashboard" active={pathname === "/dashboard"} icon={LayoutDashboard}>
+              Dashboard
+            </NavItem>
             <NavItem to="/library" active={pathname === "/library"} icon={LayoutGrid}>
               All documents
+            </NavItem>
+            <NavItem to="/favorites" active={pathname === "/favorites"} icon={Star}>
+              Favorites
             </NavItem>
           </NavSection>
 
@@ -170,7 +176,7 @@ function NavSection({
 function NavItem({
   to, icon: Icon, active, children,
 }: {
-  to: "/library" | "/admin";
+  to: "/library" | "/admin" | "/dashboard" | "/favorites";
   icon: React.ComponentType<{ className?: string }>;
   active: boolean;
   children: React.ReactNode;

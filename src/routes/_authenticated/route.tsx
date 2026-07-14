@@ -8,7 +8,7 @@ import {
 } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { LayoutGrid, Users, LogOut, Search, FolderTree, Shield } from "lucide-react";
+import { LayoutGrid, Users, LogOut, Search, FolderTree, Shield, LayoutDashboard, Star } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated")({

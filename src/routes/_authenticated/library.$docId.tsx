@@ -224,6 +224,14 @@ function DocumentPage() {
         )}
 
         <button
+          onClick={toggleFavorite}
+          title={favorite ? "Unpin" : "Pin to favorites"}
+          className="inline-flex items-center gap-1.5 rounded-sm border border-input px-2 py-1.5 text-xs hover:bg-muted"
+        >
+          <Star className={`h-3.5 w-3.5 ${favorite ? "fill-warning text-warning" : "text-muted-foreground"}`} />
+        </button>
+
+        <button
           onClick={deleteDocument}
           title="Delete document"
           className="inline-flex items-center gap-1.5 rounded-sm border border-input px-2 py-1.5 text-xs text-destructive hover:bg-destructive/10"

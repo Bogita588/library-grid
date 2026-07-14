@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  ArrowLeft, Download, FileText, Loader2, Shield, Upload, History, Trash2,
+  ArrowLeft, Download, FileText, Loader2, Shield, Upload, History, Trash2, Star,
 } from "lucide-react";
 import { toast } from "sonner";
 

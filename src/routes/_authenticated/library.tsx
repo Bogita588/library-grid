@@ -5,7 +5,7 @@ import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Search, Upload, FileText, Filter, LayoutGrid, List,
-  Calendar, Shield, Loader2, Download,
+  Shield, Loader2, Download,
 } from "lucide-react";
 import { toast } from "sonner";
 

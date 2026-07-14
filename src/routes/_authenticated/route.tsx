@@ -176,7 +176,7 @@ function NavSection({
 function NavItem({
   to, icon: Icon, active, children,
 }: {
-  to: "/library" | "/admin";
+  to: "/library" | "/admin" | "/dashboard" | "/favorites";
   icon: React.ComponentType<{ className?: string }>;
   active: boolean;
   children: React.ReactNode;

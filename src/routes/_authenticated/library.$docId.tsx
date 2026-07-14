@@ -57,6 +57,33 @@ function DocumentPage() {
 
   const currentVersion = versions[0];
 
+  const { data: favorite } = useQuery({
+    queryKey: ["favorite", docId],
+    queryFn: async () => {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return null;
+      const { data } = await supabase
+        .from("favorites")
+        .select("id")
+        .eq("user_id", userData.user.id)
+        .eq("document_id", docId)
+        .maybeSingle();
+      return data;
+    },
+  });
+
+  async function toggleFavorite() {
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) return;
+    if (favorite) {
+      await supabase.from("favorites").delete().eq("id", favorite.id);
+    } else {
+      await supabase.from("favorites").insert({ user_id: userData.user.id, document_id: docId });
+    }
+    qc.invalidateQueries({ queryKey: ["favorite", docId] });
+    qc.invalidateQueries({ queryKey: ["favorites"] });
+  }
+
   // Sign the current version for preview
   useEffect(() => {
     let cancelled = false;

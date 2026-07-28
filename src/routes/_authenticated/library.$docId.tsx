@@ -284,16 +284,18 @@ function DocumentPage() {
               <button
                 onClick={() => shareDocument("whatsapp")}
                 title="Share via WhatsApp"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-sm border border-input text-muted-foreground hover:bg-muted hover:text-foreground"
+                className="inline-flex h-8 items-center gap-1.5 rounded-sm border border-input px-2.5 text-xs font-bold uppercase text-muted-foreground hover:bg-muted hover:text-foreground"
               >
                 <MessageCircle className="h-3.5 w-3.5" />
+                WhatsApp
               </button>
               <button
                 onClick={() => shareDocument("email")}
                 title="Share by email"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-sm border border-input text-muted-foreground hover:bg-muted hover:text-foreground"
+                className="inline-flex h-8 items-center gap-1.5 rounded-sm border border-input px-2.5 text-xs font-bold uppercase text-muted-foreground hover:bg-muted hover:text-foreground"
               >
                 <Mail className="h-3.5 w-3.5" />
+                Email
               </button>
             </>
           )}
@@ -312,9 +314,10 @@ function DocumentPage() {
             <button
               onClick={deleteDocument}
               title="Delete document"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-sm border border-input text-xs text-destructive hover:bg-destructive/10"
+              className="inline-flex h-8 items-center gap-1.5 rounded-sm border border-input px-2.5 text-xs font-bold uppercase text-destructive hover:bg-destructive/10"
             >
               <Trash2 className="h-3.5 w-3.5" />
+              Delete
             </button>
           )}
         </div>

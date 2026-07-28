@@ -9,6 +9,7 @@ import {
 } from "@/lib/document-status";
 import {
   currentUser,
+  deleteDocument,
   documentDownloadUrl,
   documentViewUrl,
   listDepartments,
@@ -29,6 +30,9 @@ import {
   Loader2,
   Download,
   Eye,
+  Mail,
+  MessageCircle,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -73,7 +77,7 @@ function LibraryPage() {
     },
   });
   const canUpload = canContributeRole(currentRole);
-  const canDownload = isAdminRole(currentRole);
+  const canManageDocuments = isAdminRole(currentRole);
 
   const { data: documents = [], isLoading } = useQuery<DocRow[]>({
     queryKey: ["documents", { q, dept, status }],
@@ -217,11 +221,28 @@ function LibraryPage() {
         ) : view === "grid" ? (
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
             {documents.map((doc) => (
-              <DocCard key={doc.id} doc={doc} canDownload={canDownload} />
+              <DocCard
+                key={doc.id}
+                doc={doc}
+                canManageDocuments={canManageDocuments}
+                onDeleted={() => {
+                  qc.invalidateQueries({ queryKey: ["documents"] });
+                  qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
+                  qc.invalidateQueries({ queryKey: ["favorites"] });
+                }}
+              />
             ))}
           </div>
         ) : (
-          <DocTable docs={documents} canDownload={canDownload} />
+          <DocTable
+            docs={documents}
+            canManageDocuments={canManageDocuments}
+            onDeleted={() => {
+              qc.invalidateQueries({ queryKey: ["documents"] });
+              qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
+              qc.invalidateQueries({ queryKey: ["favorites"] });
+            }}
+          />
         )}
       </div>
 
@@ -310,7 +331,37 @@ async function downloadCurrent(docId: string) {
   window.open(signedUrl, "_blank");
 }
 
-function DocCard({ doc, canDownload }: { doc: DocRow; canDownload: boolean }) {
+async function shareCurrent(doc: DocRow, channel: "whatsapp" | "email") {
+  const signedUrl = await createCurrentSignedUrl(doc.id, "view");
+  if (!signedUrl) return;
+  const message = `${doc.title}\n${signedUrl}`;
+  if (channel === "whatsapp") {
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank", "noopener");
+    return;
+  }
+  window.location.href = `mailto:?subject=${encodeURIComponent(doc.title)}&body=${encodeURIComponent(message)}`;
+}
+
+async function deleteCurrent(doc: DocRow, onDeleted: () => void) {
+  if (!confirm(`Delete "${doc.title}" and all versions? This cannot be undone.`)) return;
+  try {
+    await deleteDocument(doc.id);
+    toast.success("Document deleted");
+    onDeleted();
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : "Delete failed");
+  }
+}
+
+function DocCard({
+  doc,
+  canManageDocuments,
+  onDeleted,
+}: {
+  doc: DocRow;
+  canManageDocuments: boolean;
+  onDeleted: () => void;
+}) {
   const color = doc.departments?.color ?? "oklch(0.43 0.13 198)";
   return (
     <article
@@ -354,43 +405,94 @@ function DocCard({ doc, canDownload }: { doc: DocRow; canDownload: boolean }) {
         </div>
       </div>
 
-      <div className="mt-auto flex items-center gap-2 border-t border-border bg-secondary/70 px-3 py-2.5 pl-5">
-        <div className="min-w-0 flex-1 truncate text-xs font-semibold text-muted-foreground">
-          {doc.departments?.name ?? "Unassigned"}
+      <div className="mt-auto space-y-2 border-t border-border bg-secondary/70 px-3 py-2.5 pl-5">
+        <div className="flex items-center gap-2">
+          <div className="min-w-0 flex-1 truncate text-xs font-semibold text-muted-foreground">
+            {doc.departments?.name ?? "Unassigned"}
+          </div>
+          {doc.confidentiality !== "public" && <Shield className="h-3 w-3 shrink-0 text-accent" />}
         </div>
-        {doc.confidentiality !== "public" && <Shield className="h-3 w-3 shrink-0 text-accent" />}
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            viewCurrent(doc.id);
-          }}
-          title="View document"
-          aria-label={`View ${doc.title}`}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-sm border border-input bg-card text-muted-foreground shadow-sm transition-colors hover:border-primary/50 hover:bg-primary hover:text-primary-foreground"
-        >
-          <Eye className="h-3.5 w-3.5" />
-        </button>
-        {canDownload && (
+        <div className="flex flex-wrap items-center gap-1.5">
           <button
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              downloadCurrent(doc.id);
+              viewCurrent(doc.id);
             }}
-            title="Download"
-            aria-label={`Download ${doc.title}`}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-sm border border-input bg-card text-muted-foreground shadow-sm transition-colors hover:border-primary/50 hover:bg-accent hover:text-accent-foreground"
+            title="View document"
+            aria-label={`View ${doc.title}`}
+            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-sm border border-input bg-card px-2.5 text-xs font-bold text-muted-foreground shadow-sm transition-colors hover:border-primary/50 hover:bg-primary hover:text-primary-foreground"
           >
-            <Download className="h-3.5 w-3.5" />
+            <Eye className="h-3.5 w-3.5" />
+            View
           </button>
-        )}
+          {canManageDocuments && (
+            <>
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  shareCurrent(doc, "whatsapp");
+                }}
+                title="Share via WhatsApp"
+                aria-label={`Share ${doc.title} via WhatsApp`}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-sm border border-input bg-card text-muted-foreground shadow-sm transition-colors hover:border-primary/50 hover:bg-primary hover:text-primary-foreground"
+              >
+                <MessageCircle className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  shareCurrent(doc, "email");
+                }}
+                title="Share by email"
+                aria-label={`Share ${doc.title} by email`}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-sm border border-input bg-card text-muted-foreground shadow-sm transition-colors hover:border-primary/50 hover:bg-primary hover:text-primary-foreground"
+              >
+                <Mail className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  downloadCurrent(doc.id);
+                }}
+                title="Download"
+                aria-label={`Download ${doc.title}`}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-sm border border-input bg-card text-muted-foreground shadow-sm transition-colors hover:border-primary/50 hover:bg-accent hover:text-accent-foreground"
+              >
+                <Download className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  deleteCurrent(doc, onDeleted);
+                }}
+                title="Delete document"
+                aria-label={`Delete ${doc.title}`}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-sm border border-input bg-card text-destructive shadow-sm transition-colors hover:border-destructive/50 hover:bg-destructive/10"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </>
+          )}
+        </div>
       </div>
     </article>
   );
 }
 
-function DocTable({ docs, canDownload }: { docs: DocRow[]; canDownload: boolean }) {
+function DocTable({
+  docs,
+  canManageDocuments,
+  onDeleted,
+}: {
+  docs: DocRow[];
+  canManageDocuments: boolean;
+  onDeleted: () => void;
+}) {
   const navigate = useNavigate();
   return (
     <div className="library-table overflow-x-auto rounded-lg">
@@ -403,7 +505,7 @@ function DocTable({ docs, canDownload }: { docs: DocRow[]; canDownload: boolean 
             <th className="px-4 py-3 text-left font-medium">Status</th>
             <th className="px-4 py-3 text-left font-medium">Ver</th>
             <th className="px-4 py-3 text-left font-medium">Updated</th>
-            <th className="w-24 px-4 py-3 text-right font-medium">Actions</th>
+            <th className="w-44 px-4 py-3 text-right font-medium">Actions</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
@@ -444,18 +546,53 @@ function DocTable({ docs, canDownload }: { docs: DocRow[]; canDownload: boolean 
                   >
                     <Eye className="h-3.5 w-3.5" />
                   </button>
-                  {canDownload && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        downloadCurrent(d.id);
-                      }}
-                      title="Download"
-                      aria-label={`Download ${d.title}`}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-sm border border-input bg-card text-muted-foreground shadow-sm transition-colors hover:border-primary/50 hover:bg-accent hover:text-accent-foreground"
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                    </button>
+                  {canManageDocuments && (
+                    <>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          shareCurrent(d, "whatsapp");
+                        }}
+                        title="Share via WhatsApp"
+                        aria-label={`Share ${d.title} via WhatsApp`}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-sm border border-input bg-card text-muted-foreground shadow-sm transition-colors hover:border-primary/50 hover:bg-primary hover:text-primary-foreground"
+                      >
+                        <MessageCircle className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          shareCurrent(d, "email");
+                        }}
+                        title="Share by email"
+                        aria-label={`Share ${d.title} by email`}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-sm border border-input bg-card text-muted-foreground shadow-sm transition-colors hover:border-primary/50 hover:bg-primary hover:text-primary-foreground"
+                      >
+                        <Mail className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          downloadCurrent(d.id);
+                        }}
+                        title="Download"
+                        aria-label={`Download ${d.title}`}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-sm border border-input bg-card text-muted-foreground shadow-sm transition-colors hover:border-primary/50 hover:bg-accent hover:text-accent-foreground"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteCurrent(d, onDeleted);
+                        }}
+                        title="Delete document"
+                        aria-label={`Delete ${d.title}`}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-sm border border-input bg-card text-destructive shadow-sm transition-colors hover:border-destructive/50 hover:bg-destructive/10"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </>
                   )}
                 </div>
               </td>

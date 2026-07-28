@@ -234,13 +234,20 @@ export async function createDocument(user: AuthUser, formData: FormData) {
 
   try {
     return await transaction(async (client) => {
+      const adminUpload = isAdmin(user);
+      const initialStatus = adminUpload ? "published" : "draft";
       const docResult = await client.query<{ id: string }>(
         `
           INSERT INTO documents (
             title, description, department_id, confidentiality, keywords,
-            status, current_version, owner_id, uploaded_by
+            status, current_version, owner_id, uploaded_by, published_by, published_at
           )
-          VALUES ($1, $2, $3, $4, $5, 'draft', 1, $6, $6)
+          VALUES (
+            $1, $2, $3, $4, $5,
+            $6::doc_status, 1, $7, $7,
+            CASE WHEN $8 THEN $7 ELSE NULL END,
+            CASE WHEN $8 THEN now() ELSE NULL END
+          )
           RETURNING id
         `,
         [
@@ -249,7 +256,9 @@ export async function createDocument(user: AuthUser, formData: FormData) {
           parsed.department_id,
           parsed.confidentiality,
           parsed.keywords || null,
+          initialStatus,
           user.id,
+          adminUpload,
         ],
       );
       await client.query(

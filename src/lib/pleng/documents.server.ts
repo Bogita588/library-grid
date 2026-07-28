@@ -244,9 +244,9 @@ export async function createDocument(user: AuthUser, formData: FormData) {
           )
           VALUES (
             $1, $2, $3, $4, $5,
-            $6::doc_status, 1, $7, $7,
-            CASE WHEN $8 THEN $7 ELSE NULL END,
-            CASE WHEN $8 THEN now() ELSE NULL END
+            $6::doc_status, 1, $7::uuid, $7::uuid,
+            CASE WHEN $8::boolean THEN $7::uuid ELSE NULL::uuid END,
+            CASE WHEN $8::boolean THEN now() ELSE NULL::timestamptz END
           )
           RETURNING id
         `,

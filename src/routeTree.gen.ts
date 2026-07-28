@@ -9,37 +9,49 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as AuthRouteImport } from './routes/auth'
-import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AuthenticatedLibraryRouteImport } from './routes/_authenticated/library'
-import { Route as AuthenticatedFavoritesRouteImport } from './routes/_authenticated/favorites'
-import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
+import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedFavoritesRouteImport } from './routes/_authenticated/favorites'
+import { Route as AuthenticatedLibraryRouteImport } from './routes/_authenticated/library'
+import { Route as ApiDashboardRouteImport } from './routes/api.dashboard'
+import { Route as ApiDepartmentsRouteImport } from './routes/api.departments'
+import { Route as ApiDocumentsRouteImport } from './routes/api.documents'
+import { Route as ApiFavoritesRouteImport } from './routes/api.favorites'
+import { Route as ApiHealthRouteImport } from './routes/api.health'
+import { Route as ApiMeRouteImport } from './routes/api.me'
+import { Route as ApiUsersRouteImport } from './routes/api.users'
 import { Route as AuthenticatedLibraryDocIdRouteImport } from './routes/_authenticated/library.$docId'
+import { Route as ApiAuthLoginRouteImport } from './routes/api.auth.login'
+import { Route as ApiAuthLogoutRouteImport } from './routes/api.auth.logout'
+import { Route as ApiAuthRegisterRouteImport } from './routes/api.auth.register'
+import { Route as ApiDocumentsDocIdRouteImport } from './routes/api.documents.$docId'
+import { Route as ApiFavoritesDocIdRouteImport } from './routes/api.favorites.$docId'
+import { Route as ApiDocumentVersionsVersionIdDownloadUrlRouteImport } from './routes/api.document-versions.$versionId.download-url'
+import { Route as ApiDocumentsDocIdDownloadUrlRouteImport } from './routes/api.documents.$docId.download-url'
+import { Route as ApiDocumentsDocIdVersionsRouteImport } from './routes/api.documents.$docId.versions'
+import { Route as ApiDocumentsDocIdViewUrlRouteImport } from './routes/api.documents.$docId.view-url'
+import { Route as ApiUsersUserIdRoleRouteImport } from './routes/api.users.$userId.role'
 
-const AuthRoute = AuthRouteImport.update({
-  id: '/auth',
-  path: '/auth',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
   id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedLibraryRoute = AuthenticatedLibraryRouteImport.update({
-  id: '/library',
-  path: '/library',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedFavoritesRoute = AuthenticatedFavoritesRouteImport.update({
-  id: '/favorites',
-  path: '/favorites',
+const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
@@ -47,10 +59,50 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
-  id: '/admin',
-  path: '/admin',
+const AuthenticatedFavoritesRoute = AuthenticatedFavoritesRouteImport.update({
+  id: '/favorites',
+  path: '/favorites',
   getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedLibraryRoute = AuthenticatedLibraryRouteImport.update({
+  id: '/library',
+  path: '/library',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const ApiDashboardRoute = ApiDashboardRouteImport.update({
+  id: '/api/dashboard',
+  path: '/api/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiDepartmentsRoute = ApiDepartmentsRouteImport.update({
+  id: '/api/departments',
+  path: '/api/departments',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiDocumentsRoute = ApiDocumentsRouteImport.update({
+  id: '/api/documents',
+  path: '/api/documents',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiFavoritesRoute = ApiFavoritesRouteImport.update({
+  id: '/api/favorites',
+  path: '/api/favorites',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiHealthRoute = ApiHealthRouteImport.update({
+  id: '/api/health',
+  path: '/api/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMeRoute = ApiMeRouteImport.update({
+  id: '/api/me',
+  path: '/api/me',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiUsersRoute = ApiUsersRouteImport.update({
+  id: '/api/users',
+  path: '/api/users',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedLibraryDocIdRoute =
   AuthenticatedLibraryDocIdRouteImport.update({
@@ -58,6 +110,60 @@ const AuthenticatedLibraryDocIdRoute =
     path: '/$docId',
     getParentRoute: () => AuthenticatedLibraryRoute,
   } as any)
+const ApiAuthLoginRoute = ApiAuthLoginRouteImport.update({
+  id: '/api/auth/login',
+  path: '/api/auth/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthLogoutRoute = ApiAuthLogoutRouteImport.update({
+  id: '/api/auth/logout',
+  path: '/api/auth/logout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthRegisterRoute = ApiAuthRegisterRouteImport.update({
+  id: '/api/auth/register',
+  path: '/api/auth/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiDocumentsDocIdRoute = ApiDocumentsDocIdRouteImport.update({
+  id: '/$docId',
+  path: '/$docId',
+  getParentRoute: () => ApiDocumentsRoute,
+} as any)
+const ApiFavoritesDocIdRoute = ApiFavoritesDocIdRouteImport.update({
+  id: '/$docId',
+  path: '/$docId',
+  getParentRoute: () => ApiFavoritesRoute,
+} as any)
+const ApiDocumentVersionsVersionIdDownloadUrlRoute =
+  ApiDocumentVersionsVersionIdDownloadUrlRouteImport.update({
+    id: '/api/document-versions/$versionId/download-url',
+    path: '/api/document-versions/$versionId/download-url',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiDocumentsDocIdDownloadUrlRoute =
+  ApiDocumentsDocIdDownloadUrlRouteImport.update({
+    id: '/download-url',
+    path: '/download-url',
+    getParentRoute: () => ApiDocumentsDocIdRoute,
+  } as any)
+const ApiDocumentsDocIdVersionsRoute =
+  ApiDocumentsDocIdVersionsRouteImport.update({
+    id: '/versions',
+    path: '/versions',
+    getParentRoute: () => ApiDocumentsDocIdRoute,
+  } as any)
+const ApiDocumentsDocIdViewUrlRoute =
+  ApiDocumentsDocIdViewUrlRouteImport.update({
+    id: '/view-url',
+    path: '/view-url',
+    getParentRoute: () => ApiDocumentsDocIdRoute,
+  } as any)
+const ApiUsersUserIdRoleRoute = ApiUsersUserIdRoleRouteImport.update({
+  id: '/$userId/role',
+  path: '/$userId/role',
+  getParentRoute: () => ApiUsersRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -66,7 +172,24 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/favorites': typeof AuthenticatedFavoritesRoute
   '/library': typeof AuthenticatedLibraryRouteWithChildren
+  '/api/dashboard': typeof ApiDashboardRoute
+  '/api/departments': typeof ApiDepartmentsRoute
+  '/api/documents': typeof ApiDocumentsRouteWithChildren
+  '/api/favorites': typeof ApiFavoritesRouteWithChildren
+  '/api/health': typeof ApiHealthRoute
+  '/api/me': typeof ApiMeRoute
+  '/api/users': typeof ApiUsersRouteWithChildren
   '/library/$docId': typeof AuthenticatedLibraryDocIdRoute
+  '/api/auth/login': typeof ApiAuthLoginRoute
+  '/api/auth/logout': typeof ApiAuthLogoutRoute
+  '/api/auth/register': typeof ApiAuthRegisterRoute
+  '/api/documents/$docId': typeof ApiDocumentsDocIdRouteWithChildren
+  '/api/favorites/$docId': typeof ApiFavoritesDocIdRoute
+  '/api/document-versions/$versionId/download-url': typeof ApiDocumentVersionsVersionIdDownloadUrlRoute
+  '/api/documents/$docId/download-url': typeof ApiDocumentsDocIdDownloadUrlRoute
+  '/api/documents/$docId/versions': typeof ApiDocumentsDocIdVersionsRoute
+  '/api/documents/$docId/view-url': typeof ApiDocumentsDocIdViewUrlRoute
+  '/api/users/$userId/role': typeof ApiUsersUserIdRoleRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -75,7 +198,24 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/favorites': typeof AuthenticatedFavoritesRoute
   '/library': typeof AuthenticatedLibraryRouteWithChildren
+  '/api/dashboard': typeof ApiDashboardRoute
+  '/api/departments': typeof ApiDepartmentsRoute
+  '/api/documents': typeof ApiDocumentsRouteWithChildren
+  '/api/favorites': typeof ApiFavoritesRouteWithChildren
+  '/api/health': typeof ApiHealthRoute
+  '/api/me': typeof ApiMeRoute
+  '/api/users': typeof ApiUsersRouteWithChildren
   '/library/$docId': typeof AuthenticatedLibraryDocIdRoute
+  '/api/auth/login': typeof ApiAuthLoginRoute
+  '/api/auth/logout': typeof ApiAuthLogoutRoute
+  '/api/auth/register': typeof ApiAuthRegisterRoute
+  '/api/documents/$docId': typeof ApiDocumentsDocIdRouteWithChildren
+  '/api/favorites/$docId': typeof ApiFavoritesDocIdRoute
+  '/api/document-versions/$versionId/download-url': typeof ApiDocumentVersionsVersionIdDownloadUrlRoute
+  '/api/documents/$docId/download-url': typeof ApiDocumentsDocIdDownloadUrlRoute
+  '/api/documents/$docId/versions': typeof ApiDocumentsDocIdVersionsRoute
+  '/api/documents/$docId/view-url': typeof ApiDocumentsDocIdViewUrlRoute
+  '/api/users/$userId/role': typeof ApiUsersUserIdRoleRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -86,7 +226,24 @@ export interface FileRoutesById {
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/favorites': typeof AuthenticatedFavoritesRoute
   '/_authenticated/library': typeof AuthenticatedLibraryRouteWithChildren
+  '/api/dashboard': typeof ApiDashboardRoute
+  '/api/departments': typeof ApiDepartmentsRoute
+  '/api/documents': typeof ApiDocumentsRouteWithChildren
+  '/api/favorites': typeof ApiFavoritesRouteWithChildren
+  '/api/health': typeof ApiHealthRoute
+  '/api/me': typeof ApiMeRoute
+  '/api/users': typeof ApiUsersRouteWithChildren
   '/_authenticated/library/$docId': typeof AuthenticatedLibraryDocIdRoute
+  '/api/auth/login': typeof ApiAuthLoginRoute
+  '/api/auth/logout': typeof ApiAuthLogoutRoute
+  '/api/auth/register': typeof ApiAuthRegisterRoute
+  '/api/documents/$docId': typeof ApiDocumentsDocIdRouteWithChildren
+  '/api/favorites/$docId': typeof ApiFavoritesDocIdRoute
+  '/api/document-versions/$versionId/download-url': typeof ApiDocumentVersionsVersionIdDownloadUrlRoute
+  '/api/documents/$docId/download-url': typeof ApiDocumentsDocIdDownloadUrlRoute
+  '/api/documents/$docId/versions': typeof ApiDocumentsDocIdVersionsRoute
+  '/api/documents/$docId/view-url': typeof ApiDocumentsDocIdViewUrlRoute
+  '/api/users/$userId/role': typeof ApiUsersUserIdRoleRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -97,7 +254,24 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/favorites'
     | '/library'
+    | '/api/dashboard'
+    | '/api/departments'
+    | '/api/documents'
+    | '/api/favorites'
+    | '/api/health'
+    | '/api/me'
+    | '/api/users'
     | '/library/$docId'
+    | '/api/auth/login'
+    | '/api/auth/logout'
+    | '/api/auth/register'
+    | '/api/documents/$docId'
+    | '/api/favorites/$docId'
+    | '/api/document-versions/$versionId/download-url'
+    | '/api/documents/$docId/download-url'
+    | '/api/documents/$docId/versions'
+    | '/api/documents/$docId/view-url'
+    | '/api/users/$userId/role'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -106,7 +280,24 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/favorites'
     | '/library'
+    | '/api/dashboard'
+    | '/api/departments'
+    | '/api/documents'
+    | '/api/favorites'
+    | '/api/health'
+    | '/api/me'
+    | '/api/users'
     | '/library/$docId'
+    | '/api/auth/login'
+    | '/api/auth/logout'
+    | '/api/auth/register'
+    | '/api/documents/$docId'
+    | '/api/favorites/$docId'
+    | '/api/document-versions/$versionId/download-url'
+    | '/api/documents/$docId/download-url'
+    | '/api/documents/$docId/versions'
+    | '/api/documents/$docId/view-url'
+    | '/api/users/$userId/role'
   id:
     | '__root__'
     | '/'
@@ -116,22 +307,50 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard'
     | '/_authenticated/favorites'
     | '/_authenticated/library'
+    | '/api/dashboard'
+    | '/api/departments'
+    | '/api/documents'
+    | '/api/favorites'
+    | '/api/health'
+    | '/api/me'
+    | '/api/users'
     | '/_authenticated/library/$docId'
+    | '/api/auth/login'
+    | '/api/auth/logout'
+    | '/api/auth/register'
+    | '/api/documents/$docId'
+    | '/api/favorites/$docId'
+    | '/api/document-versions/$versionId/download-url'
+    | '/api/documents/$docId/download-url'
+    | '/api/documents/$docId/versions'
+    | '/api/documents/$docId/view-url'
+    | '/api/users/$userId/role'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ApiDashboardRoute: typeof ApiDashboardRoute
+  ApiDepartmentsRoute: typeof ApiDepartmentsRoute
+  ApiDocumentsRoute: typeof ApiDocumentsRouteWithChildren
+  ApiFavoritesRoute: typeof ApiFavoritesRouteWithChildren
+  ApiHealthRoute: typeof ApiHealthRoute
+  ApiMeRoute: typeof ApiMeRoute
+  ApiUsersRoute: typeof ApiUsersRouteWithChildren
+  ApiAuthLoginRoute: typeof ApiAuthLoginRoute
+  ApiAuthLogoutRoute: typeof ApiAuthLogoutRoute
+  ApiAuthRegisterRoute: typeof ApiAuthRegisterRoute
+  ApiDocumentVersionsVersionIdDownloadUrlRoute: typeof ApiDocumentVersionsVersionIdDownloadUrlRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/auth': {
-      id: '/auth'
-      path: '/auth'
-      fullPath: '/auth'
-      preLoaderRoute: typeof AuthRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -141,25 +360,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/library': {
-      id: '/_authenticated/library'
-      path: '/library'
-      fullPath: '/library'
-      preLoaderRoute: typeof AuthenticatedLibraryRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/favorites': {
-      id: '/_authenticated/favorites'
-      path: '/favorites'
-      fullPath: '/favorites'
-      preLoaderRoute: typeof AuthenticatedFavoritesRouteImport
+    '/_authenticated/admin': {
+      id: '/_authenticated/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AuthenticatedAdminRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/dashboard': {
@@ -169,12 +381,68 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/admin': {
-      id: '/_authenticated/admin'
-      path: '/admin'
-      fullPath: '/admin'
-      preLoaderRoute: typeof AuthenticatedAdminRouteImport
+    '/_authenticated/favorites': {
+      id: '/_authenticated/favorites'
+      path: '/favorites'
+      fullPath: '/favorites'
+      preLoaderRoute: typeof AuthenticatedFavoritesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/library': {
+      id: '/_authenticated/library'
+      path: '/library'
+      fullPath: '/library'
+      preLoaderRoute: typeof AuthenticatedLibraryRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/api/dashboard': {
+      id: '/api/dashboard'
+      path: '/api/dashboard'
+      fullPath: '/api/dashboard'
+      preLoaderRoute: typeof ApiDashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/departments': {
+      id: '/api/departments'
+      path: '/api/departments'
+      fullPath: '/api/departments'
+      preLoaderRoute: typeof ApiDepartmentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/documents': {
+      id: '/api/documents'
+      path: '/api/documents'
+      fullPath: '/api/documents'
+      preLoaderRoute: typeof ApiDocumentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/favorites': {
+      id: '/api/favorites'
+      path: '/api/favorites'
+      fullPath: '/api/favorites'
+      preLoaderRoute: typeof ApiFavoritesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/health': {
+      id: '/api/health'
+      path: '/api/health'
+      fullPath: '/api/health'
+      preLoaderRoute: typeof ApiHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/me': {
+      id: '/api/me'
+      path: '/api/me'
+      fullPath: '/api/me'
+      preLoaderRoute: typeof ApiMeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/users': {
+      id: '/api/users'
+      path: '/api/users'
+      fullPath: '/api/users'
+      preLoaderRoute: typeof ApiUsersRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/library/$docId': {
       id: '/_authenticated/library/$docId'
@@ -182,6 +450,76 @@ declare module '@tanstack/react-router' {
       fullPath: '/library/$docId'
       preLoaderRoute: typeof AuthenticatedLibraryDocIdRouteImport
       parentRoute: typeof AuthenticatedLibraryRoute
+    }
+    '/api/auth/login': {
+      id: '/api/auth/login'
+      path: '/api/auth/login'
+      fullPath: '/api/auth/login'
+      preLoaderRoute: typeof ApiAuthLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/logout': {
+      id: '/api/auth/logout'
+      path: '/api/auth/logout'
+      fullPath: '/api/auth/logout'
+      preLoaderRoute: typeof ApiAuthLogoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/register': {
+      id: '/api/auth/register'
+      path: '/api/auth/register'
+      fullPath: '/api/auth/register'
+      preLoaderRoute: typeof ApiAuthRegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/documents/$docId': {
+      id: '/api/documents/$docId'
+      path: '/$docId'
+      fullPath: '/api/documents/$docId'
+      preLoaderRoute: typeof ApiDocumentsDocIdRouteImport
+      parentRoute: typeof ApiDocumentsRoute
+    }
+    '/api/favorites/$docId': {
+      id: '/api/favorites/$docId'
+      path: '/$docId'
+      fullPath: '/api/favorites/$docId'
+      preLoaderRoute: typeof ApiFavoritesDocIdRouteImport
+      parentRoute: typeof ApiFavoritesRoute
+    }
+    '/api/document-versions/$versionId/download-url': {
+      id: '/api/document-versions/$versionId/download-url'
+      path: '/api/document-versions/$versionId/download-url'
+      fullPath: '/api/document-versions/$versionId/download-url'
+      preLoaderRoute: typeof ApiDocumentVersionsVersionIdDownloadUrlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/documents/$docId/download-url': {
+      id: '/api/documents/$docId/download-url'
+      path: '/download-url'
+      fullPath: '/api/documents/$docId/download-url'
+      preLoaderRoute: typeof ApiDocumentsDocIdDownloadUrlRouteImport
+      parentRoute: typeof ApiDocumentsDocIdRoute
+    }
+    '/api/documents/$docId/versions': {
+      id: '/api/documents/$docId/versions'
+      path: '/versions'
+      fullPath: '/api/documents/$docId/versions'
+      preLoaderRoute: typeof ApiDocumentsDocIdVersionsRouteImport
+      parentRoute: typeof ApiDocumentsDocIdRoute
+    }
+    '/api/documents/$docId/view-url': {
+      id: '/api/documents/$docId/view-url'
+      path: '/view-url'
+      fullPath: '/api/documents/$docId/view-url'
+      preLoaderRoute: typeof ApiDocumentsDocIdViewUrlRouteImport
+      parentRoute: typeof ApiDocumentsDocIdRoute
+    }
+    '/api/users/$userId/role': {
+      id: '/api/users/$userId/role'
+      path: '/$userId/role'
+      fullPath: '/api/users/$userId/role'
+      preLoaderRoute: typeof ApiUsersUserIdRoleRouteImport
+      parentRoute: typeof ApiUsersRoute
     }
   }
 }
@@ -214,11 +552,84 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
 const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
+interface ApiDocumentsDocIdRouteChildren {
+  ApiDocumentsDocIdDownloadUrlRoute: typeof ApiDocumentsDocIdDownloadUrlRoute
+  ApiDocumentsDocIdVersionsRoute: typeof ApiDocumentsDocIdVersionsRoute
+  ApiDocumentsDocIdViewUrlRoute: typeof ApiDocumentsDocIdViewUrlRoute
+}
+
+const ApiDocumentsDocIdRouteChildren: ApiDocumentsDocIdRouteChildren = {
+  ApiDocumentsDocIdDownloadUrlRoute: ApiDocumentsDocIdDownloadUrlRoute,
+  ApiDocumentsDocIdVersionsRoute: ApiDocumentsDocIdVersionsRoute,
+  ApiDocumentsDocIdViewUrlRoute: ApiDocumentsDocIdViewUrlRoute,
+}
+
+const ApiDocumentsDocIdRouteWithChildren =
+  ApiDocumentsDocIdRoute._addFileChildren(ApiDocumentsDocIdRouteChildren)
+
+interface ApiDocumentsRouteChildren {
+  ApiDocumentsDocIdRoute: typeof ApiDocumentsDocIdRouteWithChildren
+}
+
+const ApiDocumentsRouteChildren: ApiDocumentsRouteChildren = {
+  ApiDocumentsDocIdRoute: ApiDocumentsDocIdRouteWithChildren,
+}
+
+const ApiDocumentsRouteWithChildren = ApiDocumentsRoute._addFileChildren(
+  ApiDocumentsRouteChildren,
+)
+
+interface ApiFavoritesRouteChildren {
+  ApiFavoritesDocIdRoute: typeof ApiFavoritesDocIdRoute
+}
+
+const ApiFavoritesRouteChildren: ApiFavoritesRouteChildren = {
+  ApiFavoritesDocIdRoute: ApiFavoritesDocIdRoute,
+}
+
+const ApiFavoritesRouteWithChildren = ApiFavoritesRoute._addFileChildren(
+  ApiFavoritesRouteChildren,
+)
+
+interface ApiUsersRouteChildren {
+  ApiUsersUserIdRoleRoute: typeof ApiUsersUserIdRoleRoute
+}
+
+const ApiUsersRouteChildren: ApiUsersRouteChildren = {
+  ApiUsersUserIdRoleRoute: ApiUsersUserIdRoleRoute,
+}
+
+const ApiUsersRouteWithChildren = ApiUsersRoute._addFileChildren(
+  ApiUsersRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  ApiDashboardRoute: ApiDashboardRoute,
+  ApiDepartmentsRoute: ApiDepartmentsRoute,
+  ApiDocumentsRoute: ApiDocumentsRouteWithChildren,
+  ApiFavoritesRoute: ApiFavoritesRouteWithChildren,
+  ApiHealthRoute: ApiHealthRoute,
+  ApiMeRoute: ApiMeRoute,
+  ApiUsersRoute: ApiUsersRouteWithChildren,
+  ApiAuthLoginRoute: ApiAuthLoginRoute,
+  ApiAuthLogoutRoute: ApiAuthLogoutRoute,
+  ApiAuthRegisterRoute: ApiAuthRegisterRoute,
+  ApiDocumentVersionsVersionIdDownloadUrlRoute:
+    ApiDocumentVersionsVersionIdDownloadUrlRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

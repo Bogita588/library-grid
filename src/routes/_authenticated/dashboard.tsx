@@ -1,55 +1,21 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { getDashboard } from "@/lib/pleng/api";
 import { FileText, Users, FolderOpen, Clock, TrendingUp, Shield } from "lucide-react";
+import { getDocumentStatusLabel } from "@/lib/document-status";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
-  head: () => ({ meta: [{ title: "Dashboard · Arca-DMS" }] }),
+  head: () => ({ meta: [{ title: "Dashboard · Pleng Limited" }] }),
   component: DashboardPage,
 });
 
 function DashboardPage() {
   const { data: stats } = useQuery({
     queryKey: ["dashboard-stats"],
-    queryFn: async () => {
-      const [docs, depts, users, recent, byStatus] = await Promise.all([
-        supabase.from("documents").select("id", { count: "exact", head: true }),
-        supabase.from("departments").select("id", { count: "exact", head: true }),
-        supabase.from("profiles").select("id", { count: "exact", head: true }),
-        supabase
-          .from("documents")
-          .select("id, title, document_number, updated_at, status, departments(code, color)")
-          .order("updated_at", { ascending: false })
-          .limit(6),
-        supabase.from("documents").select("status"),
-      ]);
-      const statusCounts: Record<string, number> = {};
-      (byStatus.data ?? []).forEach((r) => {
-        statusCounts[r.status] = (statusCounts[r.status] ?? 0) + 1;
-      });
-      return {
-        docs: docs.count ?? 0,
-        depts: depts.count ?? 0,
-        users: users.count ?? 0,
-        recent: recent.data ?? [],
-        statusCounts,
-      };
-    },
+    queryFn: async () => (await getDashboard()).dashboard,
   });
 
-  const { data: byDept = [] } = useQuery({
-    queryKey: ["dashboard-by-dept"],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("departments")
-        .select("id, name, code, color, documents(count)")
-        .order("name");
-      return (data ?? []).map((d) => ({
-        ...d,
-        count: (d.documents?.[0] as { count: number } | undefined)?.count ?? 0,
-      }));
-    },
-  });
+  const byDept = stats?.byDept ?? [];
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -66,11 +32,7 @@ function DashboardPage() {
           <Stat label="Documents" value={stats?.docs ?? 0} icon={FileText} />
           <Stat label="Departments" value={stats?.depts ?? 0} icon={FolderOpen} />
           <Stat label="Users" value={stats?.users ?? 0} icon={Users} />
-          <Stat
-            label="Approved"
-            value={stats?.statusCounts.approved ?? 0}
-            icon={Shield}
-          />
+          <Stat label="Published" value={stats?.statusCounts.published ?? 0} icon={Shield} />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -97,8 +59,8 @@ function DashboardPage() {
                   <div
                     className="h-6 w-6 rounded-sm flex items-center justify-center shrink-0"
                     style={{
-                      backgroundColor: `${d.departments?.color ?? "oklch(0.52 0.19 258)"}20`,
-                      color: d.departments?.color ?? "oklch(0.52 0.19 258)",
+                      backgroundColor: `color-mix(in oklch, ${d.departments?.color ?? "oklch(0.43 0.13 198)"} 16%, transparent)`,
+                      color: d.departments?.color ?? "oklch(0.43 0.13 198)",
                     }}
                   >
                     <FileText className="h-3 w-3" />
@@ -106,7 +68,8 @@ function DashboardPage() {
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium truncate">{d.title}</div>
                     <div className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
-                      {d.document_number} · {d.departments?.code}
+                      {d.document_number} · {d.departments?.code} ·{" "}
+                      {getDocumentStatusLabel(d.status)}
                     </div>
                   </div>
                   <div className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
@@ -138,21 +101,19 @@ function DashboardPage() {
                     <div className="flex items-center gap-2 mb-1">
                       <span
                         className="h-2 w-2 rounded-sm shrink-0"
-                        style={{ backgroundColor: d.color ?? "oklch(0.52 0.19 258)" }}
+                        style={{ backgroundColor: d.color ?? "oklch(0.43 0.13 198)" }}
                       />
                       <span className="text-xs font-medium flex-1 truncate group-hover:text-primary">
                         {d.name}
                       </span>
-                      <span className="text-[10px] font-mono text-muted-foreground">
-                        {d.count}
-                      </span>
+                      <span className="text-[10px] font-mono text-muted-foreground">{d.count}</span>
                     </div>
                     <div className="h-1 bg-muted rounded-sm overflow-hidden">
                       <div
                         className="h-full transition-all"
                         style={{
                           width: `${pct}%`,
-                          backgroundColor: d.color ?? "oklch(0.52 0.19 258)",
+                          backgroundColor: d.color ?? "oklch(0.43 0.13 198)",
                         }}
                       />
                     </div>

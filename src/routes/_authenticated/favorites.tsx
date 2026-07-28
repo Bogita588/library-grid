@@ -1,28 +1,17 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { listFavorites } from "@/lib/pleng/api";
 import { Star, FileText } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/favorites")({
-  head: () => ({ meta: [{ title: "Favorites · Arca-DMS" }] }),
+  head: () => ({ meta: [{ title: "Favorites · Pleng Limited" }] }),
   component: FavoritesPage,
 });
 
 function FavoritesPage() {
   const { data: favorites = [], isLoading } = useQuery({
     queryKey: ["favorites"],
-    queryFn: async () => {
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) return [];
-      const { data } = await supabase
-        .from("favorites")
-        .select(
-          "id, created_at, documents(id, title, document_number, description, status, current_version, updated_at, departments(name, code, color))",
-        )
-        .eq("user_id", userData.user.id)
-        .order("created_at", { ascending: false });
-      return (data ?? []).filter((f) => f.documents);
-    },
+    queryFn: async () => (await listFavorites()).favorites,
   });
 
   return (
@@ -55,7 +44,7 @@ function FavoritesPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {favorites.map((f) => {
               const d = f.documents!;
-              const color = d.departments?.color ?? "oklch(0.52 0.19 258)";
+              const color = d.departments?.color ?? "oklch(0.43 0.13 198)";
               return (
                 <Link
                   key={f.id}

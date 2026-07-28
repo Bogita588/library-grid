@@ -1,11 +1,11 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { supabase } from "@/integrations/supabase/client";
+import { currentUser } from "@/lib/pleng/api";
 
 export const Route = createFileRoute("/")({
   ssr: false,
   beforeLoad: async () => {
-    const { data } = await supabase.auth.getSession();
-    throw redirect({ to: data.session ? "/dashboard" : "/auth" });
+    const { user } = await currentUser();
+    throw redirect({ to: user ? "/dashboard" : "/auth" });
   },
   component: () => null,
 });

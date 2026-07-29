@@ -340,10 +340,12 @@ async function downloadCurrent(docId: string) {
   window.open(signedUrl, "_blank");
 }
 
+function documentPageUrl(docId: string) {
+  return new URL(`/library/${docId}`, window.location.origin).toString();
+}
+
 async function shareCurrent(doc: DocRow, channel: "whatsapp" | "email") {
-  const signedUrl = await createCurrentSignedUrl(doc.id, "view");
-  if (!signedUrl) return;
-  const message = `${doc.title}\n${signedUrl}`;
+  const message = `${doc.title}\n${documentPageUrl(doc.id)}`;
   if (channel === "whatsapp") {
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank", "noopener");
     return;

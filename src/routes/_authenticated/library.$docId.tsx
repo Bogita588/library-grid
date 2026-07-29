@@ -139,19 +139,15 @@ function DocumentPage() {
     }
   }
 
-  async function shareDocument(channel: "email" | "whatsapp") {
+  function shareDocument(channel: "email" | "whatsapp") {
     if (!doc || !isAdmin) return;
-    try {
-      const { url } = await documentViewUrl(doc.id);
-      const message = `${doc.title}\n${url}`;
-      if (channel === "whatsapp") {
-        window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank", "noopener");
-      } else {
-        window.location.href = `mailto:?subject=${encodeURIComponent(doc.title)}&body=${encodeURIComponent(message)}`;
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not create share link");
+    const url = new URL(`/library/${doc.id}`, window.location.origin).toString();
+    const message = `${doc.title}\n${url}`;
+    if (channel === "whatsapp") {
+      window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank", "noopener");
+      return;
     }
+    window.location.href = `mailto:?subject=${encodeURIComponent(doc.title)}&body=${encodeURIComponent(message)}`;
   }
 
   async function onNewVersion(e: React.ChangeEvent<HTMLInputElement>) {

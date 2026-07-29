@@ -31,6 +31,7 @@ import { Route as ApiDocumentsDocIdRouteImport } from './routes/api.documents.$d
 import { Route as ApiFavoritesDocIdRouteImport } from './routes/api.favorites.$docId'
 import { Route as ApiDocumentVersionsVersionIdDownloadUrlRouteImport } from './routes/api.document-versions.$versionId.download-url'
 import { Route as ApiDocumentsDocIdDownloadUrlRouteImport } from './routes/api.documents.$docId.download-url'
+import { Route as ApiDocumentsDocIdPreviewRouteImport } from './routes/api.documents.$docId.preview'
 import { Route as ApiDocumentsDocIdVersionsRouteImport } from './routes/api.documents.$docId.versions'
 import { Route as ApiDocumentsDocIdViewUrlRouteImport } from './routes/api.documents.$docId.view-url'
 import { Route as ApiUsersUserIdRoleRouteImport } from './routes/api.users.$userId.role'
@@ -147,6 +148,12 @@ const ApiDocumentsDocIdDownloadUrlRoute =
     path: '/download-url',
     getParentRoute: () => ApiDocumentsDocIdRoute,
   } as any)
+const ApiDocumentsDocIdPreviewRoute =
+  ApiDocumentsDocIdPreviewRouteImport.update({
+    id: '/preview',
+    path: '/preview',
+    getParentRoute: () => ApiDocumentsDocIdRoute,
+  } as any)
 const ApiDocumentsDocIdVersionsRoute =
   ApiDocumentsDocIdVersionsRouteImport.update({
     id: '/versions',
@@ -187,6 +194,7 @@ export interface FileRoutesByFullPath {
   '/api/favorites/$docId': typeof ApiFavoritesDocIdRoute
   '/api/document-versions/$versionId/download-url': typeof ApiDocumentVersionsVersionIdDownloadUrlRoute
   '/api/documents/$docId/download-url': typeof ApiDocumentsDocIdDownloadUrlRoute
+  '/api/documents/$docId/preview': typeof ApiDocumentsDocIdPreviewRoute
   '/api/documents/$docId/versions': typeof ApiDocumentsDocIdVersionsRoute
   '/api/documents/$docId/view-url': typeof ApiDocumentsDocIdViewUrlRoute
   '/api/users/$userId/role': typeof ApiUsersUserIdRoleRoute
@@ -213,6 +221,7 @@ export interface FileRoutesByTo {
   '/api/favorites/$docId': typeof ApiFavoritesDocIdRoute
   '/api/document-versions/$versionId/download-url': typeof ApiDocumentVersionsVersionIdDownloadUrlRoute
   '/api/documents/$docId/download-url': typeof ApiDocumentsDocIdDownloadUrlRoute
+  '/api/documents/$docId/preview': typeof ApiDocumentsDocIdPreviewRoute
   '/api/documents/$docId/versions': typeof ApiDocumentsDocIdVersionsRoute
   '/api/documents/$docId/view-url': typeof ApiDocumentsDocIdViewUrlRoute
   '/api/users/$userId/role': typeof ApiUsersUserIdRoleRoute
@@ -241,6 +250,7 @@ export interface FileRoutesById {
   '/api/favorites/$docId': typeof ApiFavoritesDocIdRoute
   '/api/document-versions/$versionId/download-url': typeof ApiDocumentVersionsVersionIdDownloadUrlRoute
   '/api/documents/$docId/download-url': typeof ApiDocumentsDocIdDownloadUrlRoute
+  '/api/documents/$docId/preview': typeof ApiDocumentsDocIdPreviewRoute
   '/api/documents/$docId/versions': typeof ApiDocumentsDocIdVersionsRoute
   '/api/documents/$docId/view-url': typeof ApiDocumentsDocIdViewUrlRoute
   '/api/users/$userId/role': typeof ApiUsersUserIdRoleRoute
@@ -269,6 +279,7 @@ export interface FileRouteTypes {
     | '/api/favorites/$docId'
     | '/api/document-versions/$versionId/download-url'
     | '/api/documents/$docId/download-url'
+    | '/api/documents/$docId/preview'
     | '/api/documents/$docId/versions'
     | '/api/documents/$docId/view-url'
     | '/api/users/$userId/role'
@@ -295,6 +306,7 @@ export interface FileRouteTypes {
     | '/api/favorites/$docId'
     | '/api/document-versions/$versionId/download-url'
     | '/api/documents/$docId/download-url'
+    | '/api/documents/$docId/preview'
     | '/api/documents/$docId/versions'
     | '/api/documents/$docId/view-url'
     | '/api/users/$userId/role'
@@ -322,6 +334,7 @@ export interface FileRouteTypes {
     | '/api/favorites/$docId'
     | '/api/document-versions/$versionId/download-url'
     | '/api/documents/$docId/download-url'
+    | '/api/documents/$docId/preview'
     | '/api/documents/$docId/versions'
     | '/api/documents/$docId/view-url'
     | '/api/users/$userId/role'
@@ -500,6 +513,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiDocumentsDocIdDownloadUrlRouteImport
       parentRoute: typeof ApiDocumentsDocIdRoute
     }
+    '/api/documents/$docId/preview': {
+      id: '/api/documents/$docId/preview'
+      path: '/preview'
+      fullPath: '/api/documents/$docId/preview'
+      preLoaderRoute: typeof ApiDocumentsDocIdPreviewRouteImport
+      parentRoute: typeof ApiDocumentsDocIdRoute
+    }
     '/api/documents/$docId/versions': {
       id: '/api/documents/$docId/versions'
       path: '/versions'
@@ -554,12 +574,14 @@ const AuthenticatedRouteRouteWithChildren =
 
 interface ApiDocumentsDocIdRouteChildren {
   ApiDocumentsDocIdDownloadUrlRoute: typeof ApiDocumentsDocIdDownloadUrlRoute
+  ApiDocumentsDocIdPreviewRoute: typeof ApiDocumentsDocIdPreviewRoute
   ApiDocumentsDocIdVersionsRoute: typeof ApiDocumentsDocIdVersionsRoute
   ApiDocumentsDocIdViewUrlRoute: typeof ApiDocumentsDocIdViewUrlRoute
 }
 
 const ApiDocumentsDocIdRouteChildren: ApiDocumentsDocIdRouteChildren = {
   ApiDocumentsDocIdDownloadUrlRoute: ApiDocumentsDocIdDownloadUrlRoute,
+  ApiDocumentsDocIdPreviewRoute: ApiDocumentsDocIdPreviewRoute,
   ApiDocumentsDocIdVersionsRoute: ApiDocumentsDocIdVersionsRoute,
   ApiDocumentsDocIdViewUrlRoute: ApiDocumentsDocIdViewUrlRoute,
 }

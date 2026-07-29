@@ -1,10 +1,12 @@
 import "@tanstack/react-start/server-only";
 
+import { SignJWT, jwtVerify } from "jose";
 import { z } from "zod";
 import { type AuthUser, canContribute, canPublish, isAdmin } from "./auth.server";
 import { query, transaction } from "./db.server";
+import { getServerEnv } from "./env.server";
 import { ApiError } from "./http.server";
-import { deleteObject, signedDownloadUrl, signedViewUrl, uploadObject } from "./s3.server";
+import { deleteObject, readObject, signedDownloadUrl, uploadObject } from "./s3.server";
 
 const statuses = ["draft", "under_review", "published", "archived"] as const;
 const confidentiality = [
@@ -27,6 +29,7 @@ const statusSchema = z.object({
 });
 
 const viewerIdsSchema = z.array(z.string().uuid()).max(500);
+const previewAudience = "pleng-document-preview";
 
 type DocumentRow = {
   id: string;
@@ -146,6 +149,33 @@ function parseViewerIds(value: FormDataEntryValue | null) {
   }
 }
 
+function previewSecretKey() {
+  return new TextEncoder().encode(getServerEnv().jwtSecret);
+}
+
+async function signPreviewToken(userId: string, documentId: string) {
+  return new SignJWT({ doc: documentId, typ: "document-preview" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(userId)
+    .setAudience(previewAudience)
+    .setIssuedAt()
+    .setExpirationTime("10m")
+    .sign(previewSecretKey());
+}
+
+async function verifyPreviewToken(documentId: string, token: string) {
+  try {
+    const { payload } = await jwtVerify(token, previewSecretKey(), {
+      audience: previewAudience,
+    });
+    if (payload.doc !== documentId || payload.typ !== "document-preview") {
+      throw new Error("Invalid preview token");
+    }
+  } catch {
+    throw new ApiError(401, "Preview link expired");
+  }
+}
+
 async function latestReadableVersion(user: AuthUser, documentId: string) {
   const params: unknown[] = [documentId];
   const visible = visibilityWhere(user, params);
@@ -163,6 +193,33 @@ async function latestReadableVersion(user: AuthUser, documentId: string) {
   const version = rows[0];
   if (!version) throw new ApiError(404, "Document file not found");
   return version;
+}
+
+async function latestVersion(documentId: string) {
+  const { rows } = await query<VersionRow>(
+    `
+      SELECT v.*
+      FROM document_versions v
+      JOIN documents d ON d.id = v.document_id
+      WHERE d.id = $1
+      ORDER BY v.version_number DESC
+      LIMIT 1
+    `,
+    [documentId],
+  );
+  const version = rows[0];
+  if (!version) throw new ApiError(404, "Document file not found");
+  return version;
+}
+
+async function previewPayload(version: VersionRow) {
+  const object = await readObject(version.storage_path);
+  return {
+    bytes: object.bytes,
+    contentLength: object.contentLength,
+    fileName: version.file_name,
+    mimeType: version.mime_type || object.contentType || "application/octet-stream",
+  };
 }
 
 export async function listDepartments() {
@@ -419,8 +476,20 @@ export async function deleteDocument(user: AuthUser, documentId: string) {
 }
 
 export async function viewUrl(user: AuthUser, documentId: string) {
+  await latestReadableVersion(user, documentId);
+  const token = await signPreviewToken(user.id, documentId);
+  return { url: `/api/documents/${documentId}/preview?token=${encodeURIComponent(token)}` };
+}
+
+export async function previewFile(user: AuthUser, documentId: string) {
   const version = await latestReadableVersion(user, documentId);
-  return { url: await signedViewUrl(version.storage_path, version.file_name) };
+  return previewPayload(version);
+}
+
+export async function previewFileFromToken(documentId: string, token: string) {
+  await verifyPreviewToken(documentId, token);
+  const version = await latestVersion(documentId);
+  return previewPayload(version);
 }
 
 export async function downloadUrl(user: AuthUser, documentId: string) {

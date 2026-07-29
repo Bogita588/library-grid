@@ -503,5 +503,6 @@ function isOfficeDocument(fileName: string, mime: string) {
 }
 
 function officePreviewUrl(fileUrl: string) {
-  return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileUrl)}`;
+  const absoluteUrl = new URL(fileUrl, window.location.origin).toString();
+  return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(absoluteUrl)}`;
 }

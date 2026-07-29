@@ -52,6 +52,17 @@ export async function deleteObject(key: string) {
   await getS3().send(new DeleteObjectCommand({ Bucket: bucket(), Key: key }));
 }
 
+export async function readObject(key: string) {
+  const result = await getS3().send(new GetObjectCommand({ Bucket: bucket(), Key: key }));
+  if (!result.Body) throw new Error("Document file body is empty");
+  const bytes = await result.Body.transformToByteArray();
+  return {
+    bytes,
+    contentType: result.ContentType ?? "application/octet-stream",
+    contentLength: result.ContentLength ?? bytes.byteLength,
+  };
+}
+
 export async function signedViewUrl(key: string, fileName: string) {
   return getSignedUrl(
     getS3(),

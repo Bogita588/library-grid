@@ -1,8 +1,9 @@
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { useThemeMode } from "@/lib/use-theme";
 import { currentUser, login } from "@/lib/pleng/api";
 import { toast } from "sonner";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2, Moon, Sun } from "lucide-react";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
@@ -19,6 +20,7 @@ function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const { isDark, toggleTheme } = useThemeMode();
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -35,8 +37,18 @@ function AuthPage() {
 
   return (
     <div className="min-h-screen grid bg-background lg:grid-cols-[0.92fr_1.08fr]">
+      <button
+        type="button"
+        onClick={toggleTheme}
+        title={isDark ? "Use light mode" : "Use dark mode"}
+        aria-label={isDark ? "Use light mode" : "Use dark mode"}
+        className="fixed right-4 top-4 z-20 inline-flex h-9 w-9 items-center justify-center rounded-sm border border-input bg-card text-muted-foreground shadow-sm transition-colors hover:bg-secondary hover:text-foreground"
+      >
+        {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+      </button>
+
       {/* Left: brand panel */}
-      <div className="hidden lg:flex flex-col justify-between p-12 bg-foreground text-background relative overflow-hidden">
+      <div className="hidden lg:flex flex-col justify-between p-12 bg-sidebar text-sidebar-foreground relative overflow-hidden">
         <div className="relative z-10">
           <div className="flex items-center gap-2">
             <img

@@ -51,6 +51,7 @@
 
 :root {
   --radius: 0.375rem;
+  color-scheme: light;
   --background: #ffffff;
   --foreground: #162536;
   --card: #ffffff;
@@ -83,6 +84,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --background: oklch(0.17 0.035 222);
   --foreground: oklch(0.96 0.012 200);
   --card: oklch(0.22 0.038 222);
@@ -119,7 +121,7 @@
   body,
   #root {
     min-height: 100%;
-    background: #ffffff !important;
+    background: var(--color-background);
   }
 
   * {
@@ -127,7 +129,7 @@
   }
 
   body {
-    background: #ffffff !important;
+    background: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
     font-weight: 500;
@@ -148,7 +150,7 @@
 
 @layer components {
   .library-surface {
-    background: #ffffff !important;
+    background: var(--color-background);
   }
 
   .library-header {
@@ -175,22 +177,22 @@
     border-color: var(--color-input);
     box-shadow:
       0 10px 22px oklch(0.18 0.04 230 / 0.08),
-      inset 0 1px 0 oklch(1 0 0 / 0.9);
+      inset 0 1px 0 color-mix(in oklch, var(--color-card) 78%, white);
   }
 
   .library-metric {
     border: 1px solid var(--color-border);
-    background: #ffffff;
-    box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.9);
+    background: var(--color-card);
+    box-shadow: inset 0 1px 0 color-mix(in oklch, var(--color-card) 78%, white);
   }
 
   .library-card {
     position: relative;
     overflow: hidden;
-    border: 1px solid oklch(0.22 0.04 220 / 0.18);
-    background: #ffffff;
+    border: 1px solid var(--color-border);
+    background: var(--color-card);
     box-shadow:
-      0 1px 0 oklch(1 0 0 / 0.8) inset,
+      0 1px 0 color-mix(in oklch, var(--color-card) 78%, white) inset,
       0 14px 32px oklch(0.18 0.045 220 / 0.09);
     transition:
       transform 0.18s ease,
@@ -206,7 +208,7 @@
       var(--color-border)
     );
     box-shadow:
-      0 1px 0 oklch(1 0 0 / 0.9) inset,
+      0 1px 0 color-mix(in oklch, var(--color-card) 78%, white) inset,
       0 18px 42px oklch(0.18 0.045 220 / 0.16);
   }
 
@@ -219,8 +221,8 @@
   .library-document-icon {
     background: linear-gradient(
       145deg,
-      color-mix(in oklch, var(--dept-color) 17%, white),
-      oklch(0.99 0.004 112)
+      color-mix(in oklch, var(--dept-color) 17%, var(--color-card)),
+      var(--color-card)
     );
     color: var(--dept-color);
     box-shadow:
@@ -236,17 +238,17 @@
 
   .form-panel {
     border: 1px solid var(--color-border);
-    background: #ffffff;
+    background: var(--color-card);
     border-radius: 0.5rem;
     box-shadow:
-      0 1px 0 oklch(1 0 0 / 0.9) inset,
+      0 1px 0 color-mix(in oklch, var(--color-card) 78%, white) inset,
       0 18px 44px oklch(0.18 0.04 230 / 0.1);
   }
 
   .form-panel-header {
     position: relative;
     border-bottom: 1px solid var(--color-border);
-    background: #ffffff;
+    background: var(--color-card);
   }
 
   .form-panel-header::before {
@@ -276,14 +278,14 @@
   .form-textarea {
     width: 100%;
     border: 1px solid var(--color-input);
-    background: #ffffff;
+    background: var(--color-background);
     color: var(--color-foreground);
     border-radius: 0.5rem;
     font-size: 0.9375rem;
     font-weight: 600;
     outline: none;
     box-shadow:
-      0 1px 0 oklch(1 0 0 / 0.85) inset,
+      0 1px 0 color-mix(in oklch, var(--color-background) 78%, white) inset,
       0 1px 2px oklch(0.18 0.04 230 / 0.05);
     transition:
       border-color 0.15s ease,
@@ -315,7 +317,7 @@
     border-color: var(--color-primary);
     box-shadow:
       0 0 0 3px var(--color-ring),
-      0 1px 0 oklch(1 0 0 / 0.95) inset;
+      0 1px 0 color-mix(in oklch, var(--color-background) 78%, white) inset;
   }
 
   .form-file {
@@ -323,7 +325,7 @@
     width: 100%;
     border: 1px dashed color-mix(in oklch, var(--color-primary) 45%, var(--color-border));
     border-radius: 0.5rem;
-    background: #ffffff;
+    background: var(--color-background);
     padding: 0.875rem;
     color: var(--color-muted-foreground);
     font-size: 0.8125rem;

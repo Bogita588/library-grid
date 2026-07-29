@@ -8,18 +8,19 @@ import {
 } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import { useThemeMode } from "@/lib/use-theme";
 import { currentUser, listDepartments, logout } from "@/lib/pleng/api";
 import {
   LayoutGrid,
   Users,
   LogOut,
-  Search,
-  FolderTree,
   Shield,
   LayoutDashboard,
   Star,
   Menu,
   X,
+  Moon,
+  Sun,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -41,6 +42,7 @@ function AuthenticatedLayout() {
     select: (s) => s.location.search as Record<string, unknown>,
   });
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { isDark, toggleTheme } = useThemeMode();
 
   const { data: departments = [] } = useQuery({
     queryKey: ["departments"],
@@ -186,8 +188,19 @@ function AuthenticatedLayout() {
               </div>
             </div>
             <button
+              type="button"
+              onClick={toggleTheme}
+              title={isDark ? "Use light mode" : "Use dark mode"}
+              aria-label={isDark ? "Use light mode" : "Use dark mode"}
+              className="rounded-sm p-1.5 text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            >
+              {isDark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+            </button>
+            <button
+              type="button"
               onClick={signOut}
               title="Sign out"
+              aria-label="Sign out"
               className="p-1.5 rounded-sm text-sidebar-foreground/60 hover:text-sidebar-accent-foreground hover:bg-sidebar-accent"
             >
               <LogOut className="h-3.5 w-3.5" />
@@ -196,17 +209,26 @@ function AuthenticatedLayout() {
         </div>
       </aside>
 
-      <div className="flex min-h-dvh min-w-0 flex-1 flex-col bg-white">
-        <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-border bg-white px-3 pl-16 xl:hidden">
+      <div className="flex min-h-dvh min-w-0 flex-1 flex-col bg-background">
+        <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-border bg-card/95 px-3 pl-16 backdrop-blur xl:hidden">
           <div className="min-w-0">
             <div className="text-sm font-bold tracking-tight">Pleng Limited</div>
             <div className="truncate font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
               {user.role.replace("_", " ")}
             </div>
           </div>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            title={isDark ? "Use light mode" : "Use dark mode"}
+            aria-label={isDark ? "Use light mode" : "Use dark mode"}
+            className="ml-auto inline-flex h-9 w-9 items-center justify-center rounded-sm border border-input bg-card text-muted-foreground shadow-sm transition-colors hover:bg-secondary hover:text-foreground"
+          >
+            {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </button>
         </header>
 
-        <main className="flex min-w-0 flex-1 flex-col bg-white">
+        <main className="flex min-w-0 flex-1 flex-col bg-background">
           <Outlet />
         </main>
       </div>
@@ -266,6 +288,3 @@ function NavItem({
     </Link>
   );
 }
-
-// Also export a suppress-unused hint for icons used by children
-export const _icons = { FolderTree, Search };

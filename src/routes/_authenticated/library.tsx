@@ -105,7 +105,7 @@ function LibraryPage() {
       : new Set(documents.map((d) => d.department_id)).size;
 
   return (
-    <div className="library-surface flex-1 flex flex-col min-h-0 bg-white">
+    <div className="library-surface flex-1 flex flex-col min-h-0 bg-background">
       {/* Header */}
       <header className="library-header shrink-0 px-4 py-5 sm:px-6">
         <div className="relative z-[1] flex flex-col gap-5 xl:flex-row xl:items-end">
@@ -164,7 +164,7 @@ function LibraryPage() {
       </header>
 
       {/* Filter bar */}
-      <div className="shrink-0 border-b border-border bg-white px-4 py-3 shadow-sm sm:px-6">
+      <div className="shrink-0 border-b border-border bg-card px-4 py-3 shadow-sm sm:px-6">
         <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
           <div className="flex min-w-0 items-center gap-2 overflow-x-auto pb-1 lg:pb-0">
             <Filter className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -213,7 +213,7 @@ function LibraryPage() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto bg-white p-4 sm:p-6">
+      <div className="flex-1 overflow-auto bg-background p-4 sm:p-6">
         {isLoading ? (
           <div className="flex items-center justify-center py-24 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading library…
@@ -621,8 +621,8 @@ function EmptyState({
   onUpload: () => void;
 }) {
   return (
-    <div className="mx-auto flex max-w-md flex-col items-center justify-center rounded-lg border border-border bg-white px-6 py-16 text-center shadow-sm animate-reveal">
-      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-md border border-primary/25 bg-white text-primary shadow-sm">
+    <div className="mx-auto flex max-w-md flex-col items-center justify-center rounded-lg border border-border bg-card px-6 py-16 text-center shadow-sm animate-reveal">
+      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-md border border-primary/25 bg-background text-primary shadow-sm">
         <FileText className="h-7 w-7" />
       </div>
       <div className="text-[10px] font-mono uppercase text-muted-foreground">
@@ -786,7 +786,7 @@ function UploadModal({
             />
           </div>
           {isRestricted && (
-            <div className="rounded-md border border-border bg-white p-3 shadow-sm">
+            <div className="rounded-md border border-border bg-card p-3 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="form-label mb-0">Who can view this document</span>
                 <span className="rounded-sm border border-border bg-secondary px-2 py-1 text-[10px] font-mono uppercase text-muted-foreground">

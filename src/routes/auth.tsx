@@ -2,7 +2,7 @@ import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { currentUser, login } from "@/lib/pleng/api";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
@@ -142,16 +142,32 @@ function Field({
   required?: boolean;
   mono?: boolean;
 }) {
+  const [showPassword, setShowPassword] = useState(false);
+  const isPassword = type === "password";
+  const inputType = isPassword && showPassword ? "text" : type;
+
   return (
     <label className="block">
       <span className="form-label">{label}</span>
-      <input
-        type={type}
-        value={value}
-        required={required}
-        onChange={(e) => onChange(e.target.value)}
-        className={`form-control ${mono ? "font-mono" : ""}`}
-      />
+      <span className="relative block">
+        <input
+          type={inputType}
+          value={value}
+          required={required}
+          onChange={(e) => onChange(e.target.value)}
+          className={`form-control ${isPassword ? "pr-11" : ""} ${mono ? "font-mono" : ""}`}
+        />
+        {isPassword && value.length > 0 && (
+          <button
+            type="button"
+            aria-label={showPassword ? "Hide password" : "Show password"}
+            onClick={() => setShowPassword((visible) => !visible)}
+            className="absolute right-2 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          >
+            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
+        )}
+      </span>
     </label>
   );
 }

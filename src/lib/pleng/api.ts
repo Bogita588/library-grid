@@ -150,9 +150,14 @@ export async function deleteDocument(docId: string) {
 }
 
 export async function documentViewUrl(docId: string) {
-  return api<{ url: string; mimeType: string; fileName: string; standardized: boolean }>(
-    `/api/documents/${docId}/view-url`,
-  );
+  return api<{
+    url: string | null;
+    mimeType: string;
+    fileName: string;
+    standardized: boolean;
+    processing: boolean;
+    previewError: string | null;
+  }>(`/api/documents/${docId}/view-url`);
 }
 
 export async function documentDownloadUrl(docId: string) {

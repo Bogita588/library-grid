@@ -36,10 +36,12 @@ import {
 import { toast } from "sonner";
 
 type DocumentPreview = {
-  url: string;
+  url: string | null;
   mimeType: string;
   fileName: string;
   standardized: boolean;
+  processing: boolean;
+  previewError: string | null;
 };
 
 export const Route = createFileRoute("/_authenticated/library/$docId")({
@@ -52,6 +54,9 @@ function DocumentPage() {
   const router = useRouter();
   const qc = useQueryClient();
   const [preview, setPreview] = useState<DocumentPreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewAttempt, setPreviewAttempt] = useState(0);
   const [uploadingNewVersion, setUploadingNewVersion] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
 
@@ -113,25 +118,47 @@ function DocumentPage() {
     }
   }
 
-  // Sign the current version for preview
+  // Sign the current version for preview. Large Office files may need a server-side
+  // PDF generation pass before the iframe can load.
   useEffect(() => {
     let cancelled = false;
+    let pollTimer: ReturnType<typeof setTimeout> | undefined;
+
     if (!currentVersion) {
       setPreview(null);
+      setPreviewLoading(false);
+      setPreviewError(null);
       return;
     }
-    (async () => {
+
+    async function loadPreview() {
+      setPreviewLoading(true);
+      setPreviewError(null);
       try {
         const nextPreview = await documentViewUrl(docId);
-        if (!cancelled) setPreview(nextPreview);
-      } catch {
-        if (!cancelled) setPreview(null);
+        if (cancelled) return;
+        setPreview(nextPreview);
+        if (nextPreview.processing) {
+          pollTimer = setTimeout(loadPreview, 3000);
+          return;
+        }
+        setPreviewLoading(false);
+      } catch (error) {
+        if (!cancelled) {
+          setPreview(null);
+          setPreviewLoading(false);
+          setPreviewError(error instanceof Error ? error.message : "Could not prepare preview");
+        }
       }
-    })();
+    }
+
+    void loadPreview();
+
     return () => {
       cancelled = true;
+      if (pollTimer) clearTimeout(pollTimer);
     };
-  }, [currentVersion?.id, docId]);
+  }, [currentVersion?.id, docId, previewAttempt]);
 
   async function downloadVersion(v: Version) {
     if (!isAdmin) {
@@ -335,10 +362,46 @@ function DocumentPage() {
             <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
               No file attached.
             </div>
-          ) : !preview ? (
-            <div className="h-full flex items-center justify-center text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin mr-2" /> Preparing preview…
+          ) : previewLoading || preview?.processing ? (
+            <div className="h-full flex flex-col items-center justify-center gap-3 px-6 text-center text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              <div>
+                <div className="text-sm font-semibold text-foreground">
+                  {preview?.processing ? "Generating PDF preview" : "Preparing preview"}
+                </div>
+                <div className="mt-1 max-w-sm text-xs leading-relaxed">
+                  {preview?.processing
+                    ? "Large Word, Excel, or PowerPoint files can take about a minute the first time they are opened."
+                    : "Opening the document viewer."}
+                </div>
+              </div>
             </div>
+          ) : previewError ? (
+            <div className="h-full flex flex-col items-center justify-center gap-4 px-6 text-center">
+              <div className="h-14 w-14 rounded-sm border-2 border-dashed border-border flex items-center justify-center">
+                <FileText className="h-6 w-6 text-muted-foreground" />
+              </div>
+              <div>
+                <div className="text-sm font-semibold">Preview could not load</div>
+                <div className="mt-1 text-xs text-muted-foreground">{previewError}</div>
+              </div>
+              <button
+                onClick={() => setPreviewAttempt((attempt) => attempt + 1)}
+                className="inline-flex items-center gap-1.5 rounded-sm bg-primary px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/90"
+              >
+                Try again
+              </button>
+            </div>
+          ) : !preview?.url ? (
+            <PreviewUnavailable
+              isOffice={isOffice}
+              mime={mime}
+              previewMime={previewMime}
+              conversionError={preview?.previewError}
+              isAdmin={isAdmin}
+              currentVersion={currentVersion}
+              onDownload={() => downloadVersion(currentVersion)}
+            />
           ) : isPdf ? (
             <iframe src={preview.url} className="w-full h-full" title={doc.title} />
           ) : isImage ? (
@@ -352,27 +415,15 @@ function DocumentPage() {
           ) : isText ? (
             <iframe src={preview.url} className="w-full h-full bg-background" title={doc.title} />
           ) : (
-            <div className="h-full flex flex-col items-center justify-center gap-4 text-center px-6">
-              <div className="h-14 w-14 rounded-sm border-2 border-dashed border-border flex items-center justify-center">
-                <FileText className="h-6 w-6 text-muted-foreground" />
-              </div>
-              <div>
-                <div className="text-sm font-semibold">Preview not available</div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  {isOffice
-                    ? "A PDF preview could not be generated for this Office document."
-                    : `This file type (${mime || previewMime || "unknown"}) can't be previewed in the browser.`}
-                </div>
-              </div>
-              {isAdmin && (
-                <button
-                  onClick={() => downloadVersion(currentVersion)}
-                  className="inline-flex items-center gap-1.5 rounded-sm bg-primary px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/90"
-                >
-                  <Download className="h-3.5 w-3.5" /> Download file
-                </button>
-              )}
-            </div>
+            <PreviewUnavailable
+              isOffice={isOffice}
+              mime={mime}
+              previewMime={previewMime}
+              conversionError={preview?.previewError}
+              isAdmin={isAdmin}
+              currentVersion={currentVersion}
+              onDownload={() => downloadVersion(currentVersion)}
+            />
           )}
         </div>
 
@@ -485,6 +536,53 @@ function Row({ label, value, mono }: { label: string; value: React.ReactNode; mo
         {label}
       </dt>
       <dd className={`flex-1 text-foreground ${mono ? "font-mono" : ""}`}>{value}</dd>
+    </div>
+  );
+}
+
+function PreviewUnavailable({
+  isOffice,
+  mime,
+  previewMime,
+  conversionError,
+  isAdmin,
+  currentVersion,
+  onDownload,
+}: {
+  isOffice: boolean;
+  mime: string;
+  previewMime: string;
+  conversionError?: string | null;
+  isAdmin: boolean;
+  currentVersion: Version;
+  onDownload: () => void;
+}) {
+  return (
+    <div className="h-full flex flex-col items-center justify-center gap-4 text-center px-6">
+      <div className="h-14 w-14 rounded-sm border-2 border-dashed border-border flex items-center justify-center">
+        <FileText className="h-6 w-6 text-muted-foreground" />
+      </div>
+      <div>
+        <div className="text-sm font-semibold">Preview not available</div>
+        <div className="text-xs text-muted-foreground mt-1">
+          {isOffice
+            ? "A PDF preview could not be generated for this Office document."
+            : `This file type (${mime || previewMime || "unknown"}) can't be previewed in the browser.`}
+        </div>
+      </div>
+      {isAdmin && (
+        <button
+          onClick={onDownload}
+          className="inline-flex items-center gap-1.5 rounded-sm bg-primary px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/90"
+        >
+          <Download className="h-3.5 w-3.5" /> Download file
+        </button>
+      )}
+      {(conversionError || currentVersion.preview_error) && (
+        <div className="max-w-sm text-xs text-muted-foreground">
+          {conversionError || currentVersion.preview_error}
+        </div>
+      )}
     </div>
   );
 }

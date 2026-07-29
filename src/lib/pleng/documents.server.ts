@@ -4,7 +4,11 @@ import { SignJWT, jwtVerify } from "jose";
 import { z } from "zod";
 import { type AuthUser, canContribute, canPublish, isAdmin } from "./auth.server";
 import { query, transaction } from "./db.server";
-import { createPdfPreview, pdfPreviewFileName } from "./document-preview.server";
+import {
+  canCreatePdfPreview,
+  createPdfPreview,
+  pdfPreviewFileName,
+} from "./document-preview.server";
 import { getServerEnv } from "./env.server";
 import { ApiError } from "./http.server";
 import { deleteObject, readObject, signedDownloadUrl, uploadBuffer } from "./s3.server";
@@ -31,6 +35,7 @@ const statusSchema = z.object({
 
 const viewerIdsSchema = z.array(z.string().uuid()).max(500);
 const previewAudience = "pleng-document-preview";
+const previewJobs = new Set<string>();
 
 type DocumentRow = {
   id: string;
@@ -80,6 +85,15 @@ type GeneratedPreview = {
   fileSize: number;
   mimeType: string;
   bytes: Buffer;
+};
+
+type ViewUrlResult = {
+  url: string | null;
+  mimeType: string;
+  fileName: string;
+  standardized: boolean;
+  processing: boolean;
+  previewError: string | null;
 };
 
 function visibilityWhere(user: AuthUser, params: unknown[]) {
@@ -294,34 +308,57 @@ async function generateAndStorePreview(
   }
 }
 
+async function generateAndStorePreviewFromStorage(version: VersionRow) {
+  const object = await readObject(version.storage_path);
+  return generateAndStorePreview(version, Buffer.from(object.bytes), object.contentType);
+}
+
+function queuePreviewGeneration(version: VersionRow) {
+  if (previewJobs.has(version.id)) return;
+  previewJobs.add(version.id);
+  void generateAndStorePreviewFromStorage(version).finally(() => {
+    previewJobs.delete(version.id);
+  });
+}
+
 async function previewInfo(version: VersionRow) {
   if (version.preview_storage_path && version.preview_file_name && version.preview_mime_type) {
     return {
       fileName: version.preview_file_name,
       mimeType: version.preview_mime_type,
       standardized: true,
+      processing: false,
+      previewError: null,
     };
   }
 
-  const object = await readObject(version.storage_path);
-  const generated = await generateAndStorePreview(
-    version,
-    Buffer.from(object.bytes),
-    object.contentType,
-  );
+  if (canCreatePdfPreview(version.file_name, version.mime_type)) {
+    if (version.preview_error && !previewJobs.has(version.id)) {
+      return {
+        fileName: pdfPreviewFileName(version.file_name),
+        mimeType: "application/pdf",
+        standardized: true,
+        processing: false,
+        previewError: version.preview_error,
+      };
+    }
 
-  if (generated) {
+    queuePreviewGeneration(version);
     return {
-      fileName: generated.fileName,
-      mimeType: generated.mimeType,
+      fileName: pdfPreviewFileName(version.file_name),
+      mimeType: "application/pdf",
       standardized: true,
+      processing: true,
+      previewError: version.preview_error,
     };
   }
 
   return {
     fileName: version.file_name,
-    mimeType: version.mime_type || object.contentType || "application/octet-stream",
+    mimeType: version.mime_type || "application/octet-stream",
     standardized: false,
+    processing: false,
+    previewError: version.preview_error,
   };
 }
 
@@ -738,15 +775,19 @@ export async function deleteDocument(user: AuthUser, documentId: string) {
   return { ok: true };
 }
 
-export async function viewUrl(user: AuthUser, documentId: string) {
+export async function viewUrl(user: AuthUser, documentId: string): Promise<ViewUrlResult> {
   const version = await latestReadableVersion(user, documentId);
   const preview = await previewInfo(version);
   const token = await signPreviewToken(user.id, documentId);
   return {
-    url: `/api/documents/${documentId}/preview?token=${encodeURIComponent(token)}`,
+    url: preview.processing
+      ? null
+      : `/api/documents/${documentId}/preview?token=${encodeURIComponent(token)}`,
     mimeType: preview.mimeType,
     fileName: preview.fileName,
     standardized: preview.standardized,
+    processing: preview.processing,
+    previewError: preview.previewError,
   };
 }
 

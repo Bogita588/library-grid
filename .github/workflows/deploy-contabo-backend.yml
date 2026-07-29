@@ -9,31 +9,47 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      CONTABO_HOST: ${{ secrets.CONTABO_HOST }}
+      CONTABO_USER: ${{ secrets.CONTABO_USER }}
+      CONTABO_SSH_KEY: ${{ secrets.CONTABO_SSH_KEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Install SSH key
         run: |
+          if [ -z "$CONTABO_HOST" ] || [ -z "$CONTABO_USER" ] || [ -z "$CONTABO_SSH_KEY" ]; then
+            echo "CONTABO_HOST, CONTABO_USER, and CONTABO_SSH_KEY GitHub secrets are required." >&2
+            exit 1
+          fi
           install -m 700 -d ~/.ssh
-          printf '%s\n' "${{ secrets.CONTABO_SSH_KEY }}" > ~/.ssh/contabo
+          printf '%s\n' "$CONTABO_SSH_KEY" > ~/.ssh/contabo
           chmod 600 ~/.ssh/contabo
-          ssh-keyscan -H "${{ secrets.CONTABO_HOST }}" >> ~/.ssh/known_hosts
+          ssh-keyscan -H "$CONTABO_HOST" >> ~/.ssh/known_hosts
+
+      - name: Test SSH connection
+        run: |
+          ssh -i ~/.ssh/contabo \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            "$CONTABO_USER@$CONTABO_HOST" \
+            "echo ssh-ok"
 
       - name: Sync backend source
         run: |
           rsync -az --delete \
-            -e "ssh -i ~/.ssh/contabo" \
+            -e "ssh -i ~/.ssh/contabo -o IdentitiesOnly=yes" \
             --exclude='.git/' \
             --exclude='node_modules/' \
             --exclude='.output/' \
             --exclude='dist/' \
             --exclude='.env' \
-            ./ "${{ secrets.CONTABO_USER }}@${{ secrets.CONTABO_HOST }}:/opt/pleng-dms/"
+            ./ "$CONTABO_USER@$CONTABO_HOST:/opt/pleng-dms/"
 
       - name: Apply PostgreSQL schema
         run: |
-          ssh -i ~/.ssh/contabo "${{ secrets.CONTABO_USER }}@${{ secrets.CONTABO_HOST }}" <<'REMOTE'
+          ssh -i ~/.ssh/contabo -o IdentitiesOnly=yes "$CONTABO_USER@$CONTABO_HOST" <<'REMOTE'
           set -euo pipefail
           cd /opt/pleng-dms
           DATABASE_URL="$(grep -E '^DATABASE_URL=' .env | tail -1 | cut -d= -f2-)"
@@ -48,7 +64,7 @@ jobs:
 
       - name: Ensure document preview tools
         run: |
-          ssh -i ~/.ssh/contabo "${{ secrets.CONTABO_USER }}@${{ secrets.CONTABO_HOST }}" <<'REMOTE'
+          ssh -i ~/.ssh/contabo -o IdentitiesOnly=yes "$CONTABO_USER@$CONTABO_HOST" <<'REMOTE'
           set -euo pipefail
           if command -v libreoffice >/dev/null 2>&1 && command -v gs >/dev/null 2>&1; then
             exit 0
@@ -71,7 +87,7 @@ jobs:
 
       - name: Build and restart backend
         run: |
-          ssh -i ~/.ssh/contabo "${{ secrets.CONTABO_USER }}@${{ secrets.CONTABO_HOST }}" <<'REMOTE'
+          ssh -i ~/.ssh/contabo -o IdentitiesOnly=yes "$CONTABO_USER@$CONTABO_HOST" <<'REMOTE'
           set -euo pipefail
           cd /opt/pleng-dms
           npm install --package-lock=false
@@ -82,4 +98,4 @@ jobs:
 
       - name: Check backend health
         run: |
-          curl --fail --show-error --silent "http://${{ secrets.CONTABO_HOST }}:3001/api/health"
+          curl --fail --show-error --silent "http://$CONTABO_HOST:3001/api/health"

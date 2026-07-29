@@ -56,7 +56,7 @@ function AuthenticatedLayout() {
   }
 
   return (
-    <div className="min-h-screen bg-white text-foreground xl:flex">
+    <div className="min-h-dvh bg-sidebar text-foreground xl:flex">
       <button
         type="button"
         aria-label="Open navigation"
@@ -79,9 +79,9 @@ function AuthenticatedLayout() {
 
       <aside
         data-open={sidebarOpen ? "true" : "false"}
-        className="dms-sidebar fixed inset-y-0 left-0 z-50 flex w-[min(18rem,86vw)] shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-2xl xl:static xl:z-auto xl:h-screen xl:w-64 xl:shadow-none"
+        className="dms-sidebar fixed inset-y-0 left-0 z-50 flex h-dvh min-h-0 w-[min(18rem,86vw)] shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-2xl xl:sticky xl:top-0 xl:z-auto xl:w-64 xl:shadow-none"
       >
-        <div className="h-14 px-4 flex items-center gap-2 border-b border-sidebar-border">
+        <div className="h-14 shrink-0 px-4 flex items-center gap-2 border-b border-sidebar-border">
           <img
             src="/pleng-logo.png"
             alt=""
@@ -100,7 +100,7 @@ function AuthenticatedLayout() {
           </button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto p-3 space-y-6">
+        <nav className="min-h-0 flex-1 overflow-y-auto p-3 space-y-6">
           <NavSection label="Workspace">
             <NavItem
               to="/dashboard"
@@ -171,7 +171,7 @@ function AuthenticatedLayout() {
           )}
         </nav>
 
-        <div className="border-t border-sidebar-border p-3">
+        <div className="shrink-0 border-t border-sidebar-border bg-sidebar p-3">
           <div className="flex items-center gap-2 px-1 py-2">
             <div className="h-8 w-8 bg-sidebar-primary text-sidebar-primary-foreground flex items-center justify-center rounded-sm text-xs font-bold uppercase shadow-sm">
               {(user.full_name ?? user.email ?? "?").slice(0, 1)}
@@ -196,7 +196,7 @@ function AuthenticatedLayout() {
         </div>
       </aside>
 
-      <div className="flex min-h-screen min-w-0 flex-1 flex-col">
+      <div className="flex min-h-dvh min-w-0 flex-1 flex-col bg-white">
         <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-border bg-white px-3 pl-16 xl:hidden">
           <div className="min-w-0">
             <div className="text-sm font-bold tracking-tight">Pleng Limited</div>

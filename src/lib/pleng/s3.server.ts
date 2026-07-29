@@ -37,13 +37,32 @@ function contentDisposition(type: "inline" | "attachment", fileName: string) {
 }
 
 export async function uploadObject({ key, file }: { key: string; file: File }) {
+  await uploadBuffer({
+    key,
+    body: Buffer.from(await file.arrayBuffer()),
+    contentLength: file.size,
+    contentType: file.type || "application/octet-stream",
+  });
+}
+
+export async function uploadBuffer({
+  key,
+  body,
+  contentLength,
+  contentType,
+}: {
+  key: string;
+  body: Buffer;
+  contentLength: number;
+  contentType: string;
+}) {
   await getS3().send(
     new PutObjectCommand({
       Bucket: bucket(),
       Key: key,
-      Body: Buffer.from(await file.arrayBuffer()),
-      ContentLength: file.size,
-      ContentType: file.type || "application/octet-stream",
+      Body: body,
+      ContentLength: contentLength,
+      ContentType: contentType,
     }),
   );
 }

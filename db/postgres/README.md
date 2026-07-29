@@ -88,6 +88,21 @@ npm run build
 node .output/server/index.mjs
 ```
 
+## Document Preview Conversion
+
+The backend keeps uploaded originals for admin downloads, then creates a compressed PDF preview
+for in-app viewing where possible. Install LibreOffice and Ghostscript on the VPS:
+
+```bash
+sudo apt update
+sudo apt install -y --no-install-recommends \
+  libreoffice-writer libreoffice-calc libreoffice-impress \
+  ghostscript fonts-dejavu fonts-liberation fonts-noto-core
+```
+
+Supported Office/PDF uploads are converted to PDF during upload. Existing older documents generate
+their missing PDF preview the first time someone opens View.
+
 ## Publishing Rules
 
 Documents are published by changing their status to `published`. The backend records `published_by` and `published_at` on the `documents` table. Publishing is allowed for `super_admin`, `admin`, and a `dept_manager` whose user department matches the document department.

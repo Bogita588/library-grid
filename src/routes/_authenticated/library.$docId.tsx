@@ -35,6 +35,13 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+type DocumentPreview = {
+  url: string;
+  mimeType: string;
+  fileName: string;
+  standardized: boolean;
+};
+
 export const Route = createFileRoute("/_authenticated/library/$docId")({
   head: () => ({ meta: [{ title: "Document · Pleng Limited" }] }),
   component: DocumentPage,
@@ -44,7 +51,7 @@ function DocumentPage() {
   const { docId } = Route.useParams();
   const router = useRouter();
   const qc = useQueryClient();
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [preview, setPreview] = useState<DocumentPreview | null>(null);
   const [uploadingNewVersion, setUploadingNewVersion] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
 
@@ -110,15 +117,15 @@ function DocumentPage() {
   useEffect(() => {
     let cancelled = false;
     if (!currentVersion) {
-      setPreviewUrl(null);
+      setPreview(null);
       return;
     }
     (async () => {
       try {
-        const { url } = await documentViewUrl(docId);
-        if (!cancelled) setPreviewUrl(url);
+        const nextPreview = await documentViewUrl(docId);
+        if (!cancelled) setPreview(nextPreview);
       } catch {
-        if (!cancelled) setPreviewUrl(null);
+        if (!cancelled) setPreview(null);
       }
     })();
     return () => {
@@ -229,9 +236,10 @@ function DocumentPage() {
   }
 
   const mime = currentVersion?.mime_type ?? "";
-  const isPdf = mime === "application/pdf";
-  const isImage = mime.startsWith("image/");
-  const isText = mime.startsWith("text/") || mime === "application/json";
+  const previewMime = preview?.mimeType ?? "";
+  const isPdf = previewMime === "application/pdf";
+  const isImage = previewMime.startsWith("image/");
+  const isText = previewMime.startsWith("text/") || previewMime === "application/json";
   const isOffice = currentVersion ? isOfficeDocument(currentVersion.file_name, mime) : false;
 
   return (
@@ -327,28 +335,22 @@ function DocumentPage() {
             <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
               No file attached.
             </div>
-          ) : !previewUrl ? (
+          ) : !preview ? (
             <div className="h-full flex items-center justify-center text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin mr-2" /> Preparing preview…
             </div>
           ) : isPdf ? (
-            <iframe src={previewUrl} className="w-full h-full" title={doc.title} />
+            <iframe src={preview.url} className="w-full h-full" title={doc.title} />
           ) : isImage ? (
             <div className="w-full h-full flex items-center justify-center p-6">
               <img
-                src={previewUrl}
+                src={preview.url}
                 alt={doc.title}
                 className="max-w-full max-h-full object-contain"
               />
             </div>
           ) : isText ? (
-            <iframe src={previewUrl} className="w-full h-full bg-background" title={doc.title} />
-          ) : isOffice ? (
-            <iframe
-              src={officePreviewUrl(previewUrl)}
-              className="h-full w-full bg-background"
-              title={doc.title}
-            />
+            <iframe src={preview.url} className="w-full h-full bg-background" title={doc.title} />
           ) : (
             <div className="h-full flex flex-col items-center justify-center gap-4 text-center px-6">
               <div className="h-14 w-14 rounded-sm border-2 border-dashed border-border flex items-center justify-center">
@@ -357,7 +359,9 @@ function DocumentPage() {
               <div>
                 <div className="text-sm font-semibold">Preview not available</div>
                 <div className="text-xs text-muted-foreground mt-1">
-                  This file type ({mime || "unknown"}) can't be previewed in the browser.
+                  {isOffice
+                    ? "A PDF preview could not be generated for this Office document."
+                    : `This file type (${mime || previewMime || "unknown"}) can't be previewed in the browser.`}
                 </div>
               </div>
               {isAdmin && (
@@ -451,6 +455,11 @@ function DocumentPage() {
                       V{v.version_number}
                     </span>
                     <span className="flex-1 truncate text-xs">{v.file_name}</span>
+                    {v.preview_mime_type === "application/pdf" && (
+                      <span className="rounded-sm bg-secondary px-1.5 py-0.5 text-[9px] font-mono uppercase text-muted-foreground">
+                        PDF view
+                      </span>
+                    )}
                     <span className="text-[10px] text-muted-foreground font-mono">
                       {v.file_size ? formatSize(v.file_size) : ""}
                     </span>
@@ -500,9 +509,4 @@ function isOfficeDocument(fileName: string, mime: string) {
       "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     ].includes(mime)
   );
-}
-
-function officePreviewUrl(fileUrl: string) {
-  const absoluteUrl = new URL(fileUrl, window.location.origin).toString();
-  return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(absoluteUrl)}`;
 }

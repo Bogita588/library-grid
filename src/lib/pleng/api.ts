@@ -45,6 +45,12 @@ export type Version = {
   file_size: number | null;
   mime_type: string | null;
   storage_path: string;
+  preview_storage_path: string | null;
+  preview_file_name: string | null;
+  preview_file_size: number | null;
+  preview_mime_type: string | null;
+  preview_generated_at: string | null;
+  preview_error: string | null;
   created_at: string;
 };
 
@@ -144,7 +150,9 @@ export async function deleteDocument(docId: string) {
 }
 
 export async function documentViewUrl(docId: string) {
-  return api<{ url: string }>(`/api/documents/${docId}/view-url`);
+  return api<{ url: string; mimeType: string; fileName: string; standardized: boolean }>(
+    `/api/documents/${docId}/view-url`,
+  );
 }
 
 export async function documentDownloadUrl(docId: string) {

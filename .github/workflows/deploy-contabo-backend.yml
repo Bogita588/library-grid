@@ -46,6 +46,29 @@ jobs:
           done
           REMOTE
 
+      - name: Ensure document preview tools
+        run: |
+          ssh -i ~/.ssh/contabo "${{ secrets.CONTABO_USER }}@${{ secrets.CONTABO_HOST }}" <<'REMOTE'
+          set -euo pipefail
+          if command -v libreoffice >/dev/null 2>&1 && command -v gs >/dev/null 2>&1; then
+            exit 0
+          fi
+          if command -v sudo >/dev/null 2>&1; then
+            SUDO=sudo
+          else
+            SUDO=
+          fi
+          $SUDO apt-get update
+          DEBIAN_FRONTEND=noninteractive $SUDO apt-get install -y --no-install-recommends \
+            libreoffice-writer \
+            libreoffice-calc \
+            libreoffice-impress \
+            ghostscript \
+            fonts-dejavu \
+            fonts-liberation \
+            fonts-noto-core
+          REMOTE
+
       - name: Build and restart backend
         run: |
           ssh -i ~/.ssh/contabo "${{ secrets.CONTABO_USER }}@${{ secrets.CONTABO_HOST }}" <<'REMOTE'

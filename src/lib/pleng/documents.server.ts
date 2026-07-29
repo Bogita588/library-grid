@@ -4,9 +4,10 @@ import { SignJWT, jwtVerify } from "jose";
 import { z } from "zod";
 import { type AuthUser, canContribute, canPublish, isAdmin } from "./auth.server";
 import { query, transaction } from "./db.server";
+import { createPdfPreview, pdfPreviewFileName } from "./document-preview.server";
 import { getServerEnv } from "./env.server";
 import { ApiError } from "./http.server";
-import { deleteObject, readObject, signedDownloadUrl, uploadObject } from "./s3.server";
+import { deleteObject, readObject, signedDownloadUrl, uploadBuffer } from "./s3.server";
 
 const statuses = ["draft", "under_review", "published", "archived"] as const;
 const confidentiality = [
@@ -58,12 +59,27 @@ type DocumentRow = {
 type VersionRow = {
   id: string;
   document_id: string;
+  department_id: string;
   version_number: number;
   storage_path: string;
   file_name: string;
   file_size: number;
   mime_type: string | null;
+  preview_storage_path: string | null;
+  preview_file_name: string | null;
+  preview_file_size: number | null;
+  preview_mime_type: string | null;
+  preview_generated_at: string | null;
+  preview_error: string | null;
   created_at: string;
+};
+
+type GeneratedPreview = {
+  storagePath: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  bytes: Buffer;
 };
 
 function visibilityWhere(user: AuthUser, params: unknown[]) {
@@ -132,6 +148,14 @@ function safeFileName(name: string) {
   return name.replace(/[/\\?%*:|"<>]/g, "-").slice(0, 180) || "document";
 }
 
+function previewObjectKey(departmentId: string, fileId: string, fileName: string) {
+  return `${departmentId}/previews/${fileId}-${safeFileName(pdfPreviewFileName(fileName))}`;
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message.slice(0, 500) : "Preview conversion failed";
+}
+
 function requireFile(value: FormDataEntryValue | null) {
   if (!(value instanceof File) || value.size === 0) {
     throw new ApiError(400, "A document file is required");
@@ -181,7 +205,7 @@ async function latestReadableVersion(user: AuthUser, documentId: string) {
   const visible = visibilityWhere(user, params);
   const { rows } = await query<VersionRow>(
     `
-      SELECT v.*
+      SELECT v.*, d.department_id
       FROM document_versions v
       JOIN documents d ON d.id = v.document_id
       WHERE d.id = $1 AND ${visible}
@@ -198,7 +222,7 @@ async function latestReadableVersion(user: AuthUser, documentId: string) {
 async function latestVersion(documentId: string) {
   const { rows } = await query<VersionRow>(
     `
-      SELECT v.*
+      SELECT v.*, d.department_id
       FROM document_versions v
       JOIN documents d ON d.id = v.document_id
       WHERE d.id = $1
@@ -212,14 +236,170 @@ async function latestVersion(documentId: string) {
   return version;
 }
 
-async function previewPayload(version: VersionRow) {
+async function generateAndStorePreview(
+  version: Pick<VersionRow, "id" | "department_id" | "storage_path" | "file_name" | "mime_type">,
+  bytes: Buffer,
+  contentType: string | null | undefined,
+) {
+  const fileId = crypto.randomUUID();
+  const storagePath = previewObjectKey(version.department_id, fileId, version.file_name);
+  try {
+    const preview = await createPdfPreview({
+      bytes,
+      fileName: version.file_name,
+      mimeType: version.mime_type || contentType,
+    });
+    if (!preview) return null;
+
+    await uploadBuffer({
+      key: storagePath,
+      body: preview.bytes,
+      contentLength: preview.bytes.byteLength,
+      contentType: preview.mimeType,
+    });
+
+    await query(
+      `
+        UPDATE document_versions
+        SET preview_storage_path = $2,
+            preview_file_name = $3,
+            preview_file_size = $4,
+            preview_mime_type = $5,
+            preview_generated_at = now(),
+            preview_error = NULL
+        WHERE id = $1
+      `,
+      [version.id, storagePath, preview.fileName, preview.bytes.byteLength, preview.mimeType],
+    );
+
+    return {
+      storagePath,
+      fileName: preview.fileName,
+      fileSize: preview.bytes.byteLength,
+      mimeType: preview.mimeType,
+      bytes: preview.bytes,
+    } satisfies GeneratedPreview;
+  } catch (error) {
+    console.warn("Document PDF preview generation failed", {
+      versionId: version.id,
+      fileName: version.file_name,
+      error,
+    });
+    await query("UPDATE document_versions SET preview_error = $2 WHERE id = $1", [
+      version.id,
+      errorMessage(error),
+    ]).catch(() => undefined);
+    await deleteObject(storagePath).catch(() => undefined);
+    return null;
+  }
+}
+
+async function previewInfo(version: VersionRow) {
+  if (version.preview_storage_path && version.preview_file_name && version.preview_mime_type) {
+    return {
+      fileName: version.preview_file_name,
+      mimeType: version.preview_mime_type,
+      standardized: true,
+    };
+  }
+
   const object = await readObject(version.storage_path);
+  const generated = await generateAndStorePreview(
+    version,
+    Buffer.from(object.bytes),
+    object.contentType,
+  );
+
+  if (generated) {
+    return {
+      fileName: generated.fileName,
+      mimeType: generated.mimeType,
+      standardized: true,
+    };
+  }
+
+  return {
+    fileName: version.file_name,
+    mimeType: version.mime_type || object.contentType || "application/octet-stream",
+    standardized: false,
+  };
+}
+
+async function previewPayload(version: VersionRow) {
+  if (version.preview_storage_path && version.preview_file_name && version.preview_mime_type) {
+    const object = await readObject(version.preview_storage_path);
+    return {
+      bytes: object.bytes,
+      contentLength: object.contentLength,
+      fileName: version.preview_file_name,
+      mimeType: version.preview_mime_type,
+    };
+  }
+
+  const object = await readObject(version.storage_path);
+  const generated = await generateAndStorePreview(
+    version,
+    Buffer.from(object.bytes),
+    object.contentType,
+  );
+
+  if (generated) {
+    return {
+      bytes: generated.bytes,
+      contentLength: generated.fileSize,
+      fileName: generated.fileName,
+      mimeType: generated.mimeType,
+    };
+  }
+
   return {
     bytes: object.bytes,
     contentLength: object.contentLength,
     fileName: version.file_name,
     mimeType: version.mime_type || object.contentType || "application/octet-stream",
   };
+}
+
+async function createUploadedPreview({
+  departmentId,
+  fileId,
+  fileName,
+  mimeType,
+  bytes,
+}: {
+  departmentId: string;
+  fileId: string;
+  fileName: string;
+  mimeType: string | null;
+  bytes: Buffer;
+}) {
+  const storagePath = previewObjectKey(departmentId, fileId, fileName);
+  try {
+    const preview = await createPdfPreview({ bytes, fileName, mimeType });
+    if (!preview) return { preview: null, error: null };
+
+    await uploadBuffer({
+      key: storagePath,
+      body: preview.bytes,
+      contentLength: preview.bytes.byteLength,
+      contentType: preview.mimeType,
+    });
+
+    return {
+      preview: {
+        storagePath,
+        fileName: preview.fileName,
+        fileSize: preview.bytes.byteLength,
+        mimeType: preview.mimeType,
+        bytes: preview.bytes,
+      } satisfies GeneratedPreview,
+      error: null,
+    };
+  } catch (error) {
+    console.warn("Document PDF preview generation failed", { fileName, error });
+    await deleteObject(storagePath).catch(() => undefined);
+    return { preview: null, error: errorMessage(error) };
+  }
 }
 
 export async function listDepartments() {
@@ -301,7 +481,13 @@ export async function getDocument(user: AuthUser, documentId: string) {
 export async function listVersions(user: AuthUser, documentId: string) {
   await getDocument(user, documentId);
   const { rows } = await query<VersionRow>(
-    "SELECT * FROM document_versions WHERE document_id = $1 ORDER BY version_number DESC",
+    `
+      SELECT v.*, d.department_id
+      FROM document_versions v
+      JOIN documents d ON d.id = v.document_id
+      WHERE v.document_id = $1
+      ORDER BY v.version_number DESC
+    `,
     [documentId],
   );
   return rows;
@@ -325,8 +511,22 @@ export async function createDocument(user: AuthUser, formData: FormData) {
       ? []
       : parseViewerIds(formData.get("viewer_ids")).filter((id) => id !== user.id);
 
-  const key = `${parsed.department_id}/${crypto.randomUUID()}-${safeFileName(file.name)}`;
-  await uploadObject({ key, file });
+  const fileId = crypto.randomUUID();
+  const fileBytes = Buffer.from(await file.arrayBuffer());
+  const key = `${parsed.department_id}/${fileId}-${safeFileName(file.name)}`;
+  await uploadBuffer({
+    key,
+    body: fileBytes,
+    contentLength: fileBytes.byteLength,
+    contentType: file.type || "application/octet-stream",
+  });
+  const previewResult = await createUploadedPreview({
+    departmentId: parsed.department_id,
+    fileId,
+    fileName: file.name,
+    mimeType: file.type || null,
+    bytes: fileBytes,
+  });
 
   try {
     return await transaction(async (client) => {
@@ -379,11 +579,30 @@ export async function createDocument(user: AuthUser, formData: FormData) {
       await client.query(
         `
           INSERT INTO document_versions (
-            document_id, version_number, file_name, file_size, mime_type, storage_path, uploaded_by
+            document_id, version_number, file_name, file_size, mime_type, storage_path, uploaded_by,
+            preview_storage_path, preview_file_name, preview_file_size, preview_mime_type,
+            preview_generated_at, preview_error
           )
-          VALUES ($1, 1, $2, $3, $4, $5, $6)
+          VALUES (
+            $1, 1, $2, $3, $4, $5, $6,
+            $7, $8, $9, $10,
+            CASE WHEN $7::text IS NULL THEN NULL ELSE now() END,
+            $11
+          )
         `,
-        [documentId, file.name, file.size, file.type || null, key, user.id],
+        [
+          documentId,
+          file.name,
+          fileBytes.byteLength,
+          file.type || null,
+          key,
+          user.id,
+          previewResult.preview?.storagePath ?? null,
+          previewResult.preview?.fileName ?? null,
+          previewResult.preview?.fileSize ?? null,
+          previewResult.preview?.mimeType ?? null,
+          previewResult.error,
+        ],
       );
       await client.query(
         "INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES ($1, 'document.created', 'document', $2)",
@@ -393,6 +612,9 @@ export async function createDocument(user: AuthUser, formData: FormData) {
     });
   } catch (error) {
     await deleteObject(key).catch(() => undefined);
+    if (previewResult.preview?.storagePath) {
+      await deleteObject(previewResult.preview.storagePath).catch(() => undefined);
+    }
     throw error;
   }
 }
@@ -405,8 +627,22 @@ export async function addVersion(user: AuthUser, documentId: string, formData: F
   }
 
   const file = requireFile(formData.get("file"));
-  const key = `${doc.department_id}/${crypto.randomUUID()}-${safeFileName(file.name)}`;
-  await uploadObject({ key, file });
+  const fileId = crypto.randomUUID();
+  const fileBytes = Buffer.from(await file.arrayBuffer());
+  const key = `${doc.department_id}/${fileId}-${safeFileName(file.name)}`;
+  await uploadBuffer({
+    key,
+    body: fileBytes,
+    contentLength: fileBytes.byteLength,
+    contentType: file.type || "application/octet-stream",
+  });
+  const previewResult = await createUploadedPreview({
+    departmentId: doc.department_id,
+    fileId,
+    fileName: file.name,
+    mimeType: file.type || null,
+    bytes: fileBytes,
+  });
 
   try {
     return await transaction(async (client) => {
@@ -414,11 +650,31 @@ export async function addVersion(user: AuthUser, documentId: string, formData: F
       await client.query(
         `
           INSERT INTO document_versions (
-            document_id, version_number, file_name, file_size, mime_type, storage_path, uploaded_by
+            document_id, version_number, file_name, file_size, mime_type, storage_path, uploaded_by,
+            preview_storage_path, preview_file_name, preview_file_size, preview_mime_type,
+            preview_generated_at, preview_error
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7)
+          VALUES (
+            $1, $2, $3, $4, $5, $6, $7,
+            $8, $9, $10, $11,
+            CASE WHEN $8::text IS NULL THEN NULL ELSE now() END,
+            $12
+          )
         `,
-        [documentId, nextVersion, file.name, file.size, file.type || null, key, user.id],
+        [
+          documentId,
+          nextVersion,
+          file.name,
+          fileBytes.byteLength,
+          file.type || null,
+          key,
+          user.id,
+          previewResult.preview?.storagePath ?? null,
+          previewResult.preview?.fileName ?? null,
+          previewResult.preview?.fileSize ?? null,
+          previewResult.preview?.mimeType ?? null,
+          previewResult.error,
+        ],
       );
       await client.query("UPDATE documents SET current_version = $1 WHERE id = $2", [
         nextVersion,
@@ -432,6 +688,9 @@ export async function addVersion(user: AuthUser, documentId: string, formData: F
     });
   } catch (error) {
     await deleteObject(key).catch(() => undefined);
+    if (previewResult.preview?.storagePath) {
+      await deleteObject(previewResult.preview.storagePath).catch(() => undefined);
+    }
     throw error;
   }
 }
@@ -470,15 +729,25 @@ export async function deleteDocument(user: AuthUser, documentId: string) {
   const versions = await listVersions(user, documentId);
   await query("DELETE FROM documents WHERE id = $1", [documentId]);
   await Promise.all(
-    versions.map((version) => deleteObject(version.storage_path).catch(() => undefined)),
+    versions.flatMap((version) =>
+      [version.storage_path, version.preview_storage_path]
+        .filter((key): key is string => Boolean(key))
+        .map((key) => deleteObject(key).catch(() => undefined)),
+    ),
   );
   return { ok: true };
 }
 
 export async function viewUrl(user: AuthUser, documentId: string) {
-  await latestReadableVersion(user, documentId);
+  const version = await latestReadableVersion(user, documentId);
+  const preview = await previewInfo(version);
   const token = await signPreviewToken(user.id, documentId);
-  return { url: `/api/documents/${documentId}/preview?token=${encodeURIComponent(token)}` };
+  return {
+    url: `/api/documents/${documentId}/preview?token=${encodeURIComponent(token)}`,
+    mimeType: preview.mimeType,
+    fileName: preview.fileName,
+    standardized: preview.standardized,
+  };
 }
 
 export async function previewFile(user: AuthUser, documentId: string) {
@@ -504,7 +773,7 @@ export async function versionDownloadUrl(user: AuthUser, versionId: string) {
   const visible = visibilityWhere(user, params);
   const { rows } = await query<VersionRow>(
     `
-      SELECT v.*
+      SELECT v.*, d.department_id
       FROM document_versions v
       JOIN documents d ON d.id = v.document_id
       WHERE v.id = $1 AND ${visible}

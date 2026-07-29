@@ -232,6 +232,7 @@ function DocumentPage() {
   const isPdf = mime === "application/pdf";
   const isImage = mime.startsWith("image/");
   const isText = mime.startsWith("text/") || mime === "application/json";
+  const isOffice = currentVersion ? isOfficeDocument(currentVersion.file_name, mime) : false;
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -342,6 +343,12 @@ function DocumentPage() {
             </div>
           ) : isText ? (
             <iframe src={previewUrl} className="w-full h-full bg-background" title={doc.title} />
+          ) : isOffice ? (
+            <iframe
+              src={officePreviewUrl(previewUrl)}
+              className="h-full w-full bg-background"
+              title={doc.title}
+            />
           ) : (
             <div className="h-full flex flex-col items-center justify-center gap-4 text-center px-6">
               <div className="h-14 w-14 rounded-sm border-2 border-dashed border-border flex items-center justify-center">
@@ -478,4 +485,23 @@ function formatSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
+}
+
+function isOfficeDocument(fileName: string, mime: string) {
+  const extension = fileName.split(".").pop()?.toLowerCase();
+  return (
+    ["doc", "docx", "xls", "xlsx", "ppt", "pptx"].includes(extension ?? "") ||
+    [
+      "application/msword",
+      "application/vnd.ms-excel",
+      "application/vnd.ms-powerpoint",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ].includes(mime)
+  );
+}
+
+function officePreviewUrl(fileUrl: string) {
+  return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileUrl)}`;
 }

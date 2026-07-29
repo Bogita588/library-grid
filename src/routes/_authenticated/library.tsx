@@ -11,7 +11,6 @@ import {
   currentUser,
   deleteDocument,
   documentDownloadUrl,
-  documentViewUrl,
   listDepartments,
   listDocuments,
   listUsers,
@@ -302,40 +301,18 @@ function LibraryMetric({ label, value }: { label: string; value: number }) {
   );
 }
 
-async function createCurrentSignedUrl(docId: string, mode: "view" | "download") {
+async function createDownloadSignedUrl(docId: string) {
   try {
-    const { url } =
-      mode === "download" ? await documentDownloadUrl(docId) : await documentViewUrl(docId);
+    const { url } = await documentDownloadUrl(docId);
     return url;
   } catch (err) {
-    toast.error(
-      err instanceof Error
-        ? err.message
-        : mode === "download"
-          ? "Could not create download link"
-          : "Could not create view link",
-    );
+    toast.error(err instanceof Error ? err.message : "Could not create download link");
     return null;
   }
 }
 
-async function viewCurrent(docId: string) {
-  const previewWindow = window.open("", "_blank");
-  const signedUrl = await createCurrentSignedUrl(docId, "view");
-  if (!signedUrl) {
-    previewWindow?.close();
-    return;
-  }
-  if (previewWindow) {
-    previewWindow.opener = null;
-    previewWindow.location.href = signedUrl;
-    return;
-  }
-  window.open(signedUrl, "_blank");
-}
-
 async function downloadCurrent(docId: string) {
-  const signedUrl = await createCurrentSignedUrl(docId, "download");
+  const signedUrl = await createDownloadSignedUrl(docId);
   if (!signedUrl) return;
   window.open(signedUrl, "_blank");
 }
@@ -431,19 +408,16 @@ function DocCard({
           Added by <span className="text-foreground">{addedBy(doc)}</span>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
-          <button
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              viewCurrent(doc.id);
-            }}
+          <Link
+            to="/library/$docId"
+            params={{ docId: doc.id }}
             title="View document"
             aria-label={`View ${doc.title}`}
             className="inline-flex h-8 items-center justify-center gap-1.5 rounded-sm border border-input bg-card px-2.5 text-xs font-bold text-muted-foreground shadow-sm transition-colors hover:border-primary/50 hover:bg-primary hover:text-primary-foreground"
           >
             <Eye className="h-3.5 w-3.5" />
             View
-          </button>
+          </Link>
           {canManageDocuments && (
             <>
               <button
@@ -557,17 +531,18 @@ function DocTable({
               </td>
               <td className="px-4 py-3">
                 <div className="flex items-center justify-end gap-1.5">
-                  <button
+                  <Link
+                    to="/library/$docId"
+                    params={{ docId: d.id }}
                     onClick={(e) => {
                       e.stopPropagation();
-                      viewCurrent(d.id);
                     }}
                     title="View document"
                     aria-label={`View ${d.title}`}
                     className="inline-flex h-8 w-8 items-center justify-center rounded-sm border border-input bg-card text-muted-foreground shadow-sm transition-colors hover:border-primary/50 hover:bg-primary hover:text-primary-foreground"
                   >
                     <Eye className="h-3.5 w-3.5" />
-                  </button>
+                  </Link>
                   {canManageDocuments && (
                     <>
                       <button

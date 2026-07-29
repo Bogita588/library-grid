@@ -14,6 +14,7 @@ import {
   documentViewUrl,
   listDepartments,
   listDocuments,
+  listUsers,
   uploadDocument,
   type Department,
   type DocumentRow as DocRow,
@@ -78,6 +79,12 @@ function LibraryPage() {
   });
   const canUpload = canContributeRole(currentRole);
   const canManageDocuments = isAdminRole(currentRole);
+
+  const { data: users = [], isLoading: usersLoading } = useQuery<LibraryUser[]>({
+    queryKey: ["users", "document-viewers"],
+    enabled: canUpload,
+    queryFn: async () => (await listUsers()).users,
+  });
 
   const { data: documents = [], isLoading } = useQuery<DocRow[]>({
     queryKey: ["documents", { q, dept, status }],
@@ -249,6 +256,8 @@ function LibraryPage() {
       {uploadOpen && canUpload && (
         <UploadModal
           departments={departments}
+          users={users}
+          usersLoading={usersLoading}
           defaultDeptId={deptId}
           onClose={() => setUploadOpen(false)}
           onUploaded={() => {
@@ -656,14 +665,25 @@ function EmptyState({
 /* --------------------------- Upload modal --------------------------- */
 
 type Dept = Pick<Department, "id" | "name" | "code">;
+type LibraryUser = {
+  id: string;
+  full_name: string | null;
+  email: string;
+  role: AppRole;
+  department_id: string | null;
+};
 
 function UploadModal({
   departments,
+  users,
+  usersLoading,
   defaultDeptId,
   onClose,
   onUploaded,
 }: {
   departments: Dept[];
+  users: LibraryUser[];
+  usersLoading: boolean;
   defaultDeptId: string | undefined;
   onClose: () => void;
   onUploaded: () => void;
@@ -675,9 +695,23 @@ function UploadModal({
   const [deptId, setDeptId] = useState<string>(defaultDeptId ?? departments[0]?.id ?? "");
   const [confidentiality, setConfidentiality] = useState<
     "public" | "internal" | "department" | "confidential" | "strictly_confidential"
-  >("internal");
+  >("public");
+  const [viewerIds, setViewerIds] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const hasDepartments = departments.length > 0;
+  const isRestricted = confidentiality !== "public";
+
+  function updateConfidentiality(value: string) {
+    const next = value as typeof confidentiality;
+    setConfidentiality(next);
+    if (next === "public") setViewerIds([]);
+  }
+
+  function toggleViewer(userId: string) {
+    setViewerIds((selected) =>
+      selected.includes(userId) ? selected.filter((id) => id !== userId) : [...selected, userId],
+    );
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -691,6 +725,7 @@ function UploadModal({
       formData.set("confidentiality", confidentiality);
       if (description.trim()) formData.set("description", description.trim());
       if (keywords.trim()) formData.set("keywords", keywords.trim());
+      if (isRestricted) formData.set("viewer_ids", JSON.stringify(viewerIds));
 
       await uploadDocument(formData);
       toast.success("Document uploaded");
@@ -704,7 +739,7 @@ function UploadModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 p-4 backdrop-blur-sm">
-      <div className="form-panel w-full max-w-lg overflow-hidden animate-reveal">
+      <div className="form-panel w-full max-w-2xl overflow-hidden animate-reveal">
         <div className="form-panel-header flex items-center justify-between px-5 py-4">
           <div>
             <div className="text-xs font-bold uppercase text-primary">New entry</div>
@@ -717,7 +752,10 @@ function UploadModal({
             ×
           </button>
         </div>
-        <form onSubmit={onSubmit} className="space-y-5 p-5">
+        <form
+          onSubmit={onSubmit}
+          className="max-h-[calc(100dvh-8rem)] space-y-5 overflow-y-auto p-5"
+        >
           <label className="block">
             <span className="form-label">File</span>
             <input
@@ -739,7 +777,7 @@ function UploadModal({
               Add at least one department before uploading documents.
             </div>
           )}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Select
               label="Department"
               value={deptId}
@@ -749,7 +787,7 @@ function UploadModal({
             <Select
               label="Confidentiality"
               value={confidentiality}
-              onChange={(v) => setConfidentiality(v as typeof confidentiality)}
+              onChange={updateConfidentiality}
               options={[
                 { value: "public", label: "Public" },
                 { value: "internal", label: "Internal" },
@@ -759,6 +797,59 @@ function UploadModal({
               ]}
             />
           </div>
+          {isRestricted && (
+            <div className="rounded-md border border-border bg-white p-3 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="form-label mb-0">Who can view this document</span>
+                <span className="rounded-sm border border-border bg-secondary px-2 py-1 text-[10px] font-mono uppercase text-muted-foreground">
+                  {viewerIds.length} selected
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Uploader and admins keep access. Select the other users allowed to view it.
+              </p>
+              <div className="mt-3 max-h-48 overflow-y-auto rounded-md border border-border bg-card">
+                {usersLoading ? (
+                  <div className="flex items-center gap-2 px-3 py-4 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading users
+                  </div>
+                ) : users.length === 0 ? (
+                  <div className="px-3 py-4 text-sm text-muted-foreground">
+                    Add users before restricting a document.
+                  </div>
+                ) : (
+                  users.map((viewer) => {
+                    const checked = viewerIds.includes(viewer.id);
+                    return (
+                      <label
+                        key={viewer.id}
+                        className="flex cursor-pointer items-center gap-3 border-b border-border/70 px-3 py-2 last:border-b-0 hover:bg-secondary/80"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleViewer(viewer.id)}
+                          className="h-4 w-4 accent-primary"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-bold text-foreground">
+                            {viewer.full_name || viewer.email}
+                          </span>
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {viewer.email}
+                          </span>
+                        </span>
+                        <span className="rounded-sm bg-secondary px-2 py-1 text-[10px] font-mono uppercase text-muted-foreground">
+                          {viewer.role.replace("_", " ")}
+                        </span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          )}
           <div className="flex justify-end gap-2 border-t border-border pt-4">
             <button
               type="button"

@@ -2,7 +2,7 @@ import "@tanstack/react-start/server-only";
 
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { type AuthUser, isAdmin } from "./auth.server";
+import { type AuthUser, canContribute, isAdmin } from "./auth.server";
 import { query, transaction } from "./db.server";
 import { ApiError } from "./http.server";
 
@@ -20,7 +20,9 @@ const createUserSchema = z.object({
 const DEFAULT_LIBRARY_PASSWORD = "docs.pleng";
 
 export async function listUsers(user: AuthUser) {
-  if (!isAdmin(user)) throw new ApiError(403, "Admin access required");
+  if (!isAdmin(user) && !canContribute(user)) {
+    throw new ApiError(403, "User list access required");
+  }
   const { rows } = await query(
     `
       SELECT u.id, u.full_name, u.email, u.department_id, u.created_at,
@@ -29,6 +31,7 @@ export async function listUsers(user: AuthUser) {
                'viewer'
              ) AS role
       FROM app_users u
+      WHERE u.active = true
       ORDER BY u.created_at DESC
     `,
   );

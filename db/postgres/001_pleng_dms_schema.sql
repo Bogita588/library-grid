@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS documents (
   folder_id uuid REFERENCES folders(id) ON DELETE SET NULL,
   category text,
   status doc_status NOT NULL DEFAULT 'draft',
-  confidentiality confidentiality NOT NULL DEFAULT 'internal',
+  confidentiality confidentiality NOT NULL DEFAULT 'public',
   tags text[] DEFAULT '{}',
   keywords text,
   owner_id uuid REFERENCES app_users(id) ON DELETE SET NULL,
@@ -92,6 +92,14 @@ CREATE TABLE IF NOT EXISTS document_versions (
   uploaded_by uuid REFERENCES app_users(id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (document_id, version_number)
+);
+
+CREATE TABLE IF NOT EXISTS document_viewers (
+  document_id uuid NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+  granted_by uuid REFERENCES app_users(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (document_id, user_id)
 );
 
 CREATE TABLE IF NOT EXISTS favorites (
@@ -123,6 +131,7 @@ CREATE INDEX IF NOT EXISTS documents_status_idx ON documents(status);
 CREATE INDEX IF NOT EXISTS documents_search_idx ON documents USING GIN(search_tsv);
 CREATE INDEX IF NOT EXISTS documents_tags_idx ON documents USING GIN(tags);
 CREATE INDEX IF NOT EXISTS document_versions_doc_idx ON document_versions(document_id);
+CREATE INDEX IF NOT EXISTS document_viewers_user_idx ON document_viewers(user_id);
 CREATE UNIQUE INDEX IF NOT EXISTS favorites_user_document_idx
   ON favorites(user_id, document_id)
   WHERE document_id IS NOT NULL;

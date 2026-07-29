@@ -25,6 +25,8 @@ const statusSchema = z.object({
   status: z.enum(statuses),
 });
 
+const viewerIdsSchema = z.array(z.string().uuid()).max(500);
+
 type DocumentRow = {
   id: string;
   document_number: string | null;
@@ -63,15 +65,19 @@ function visibilityWhere(user: AuthUser, params: unknown[]) {
     return "TRUE";
   }
 
-  params.push(user.id, user.department_id);
-  const userId = `$${params.length - 1}`;
-  const departmentId = `$${params.length}`;
+  params.push(user.id);
+  const userId = `$${params.length}`;
   return `
     (
-      d.confidentiality IN ('public','internal')
+      d.confidentiality = 'public'
       OR d.owner_id = ${userId}
       OR d.uploaded_by = ${userId}
-      OR (d.confidentiality = 'department' AND d.department_id = ${departmentId})
+      OR EXISTS (
+        SELECT 1
+        FROM document_viewers dv
+        WHERE dv.document_id = d.id
+          AND dv.user_id = ${userId}
+      )
     )
   `;
 }
@@ -118,6 +124,16 @@ function requireFile(value: FormDataEntryValue | null) {
     throw new ApiError(400, "A document file is required");
   }
   return value;
+}
+
+function parseViewerIds(value: FormDataEntryValue | null) {
+  if (typeof value !== "string" || !value.trim()) return [];
+
+  try {
+    return [...new Set(viewerIdsSchema.parse(JSON.parse(value)))];
+  } catch {
+    throw new ApiError(400, "Invalid viewer selection");
+  }
 }
 
 async function latestReadableVersion(user: AuthUser, documentId: string) {
@@ -225,9 +241,13 @@ export async function createDocument(user: AuthUser, formData: FormData) {
       description: z.string().optional(),
       keywords: z.string().optional(),
       department_id: z.string().uuid(),
-      confidentiality: z.enum(confidentiality).default("internal"),
+      confidentiality: z.enum(confidentiality).default("public"),
     })
     .parse(Object.fromEntries(formData.entries()));
+  const viewerIds =
+    parsed.confidentiality === "public"
+      ? []
+      : parseViewerIds(formData.get("viewer_ids")).filter((id) => id !== user.id);
 
   const key = `${parsed.department_id}/${crypto.randomUUID()}-${safeFileName(file.name)}`;
   await uploadObject({ key, file });
@@ -261,6 +281,25 @@ export async function createDocument(user: AuthUser, formData: FormData) {
           adminUpload,
         ],
       );
+      const documentId = docResult.rows[0].id;
+      if (viewerIds.length > 0) {
+        const validUsers = await client.query<{ id: string }>(
+          "SELECT id FROM app_users WHERE active = true AND id = ANY($1::uuid[])",
+          [viewerIds],
+        );
+        if (validUsers.rows.length !== viewerIds.length) {
+          throw new ApiError(400, "One or more selected viewers could not be found");
+        }
+        await client.query(
+          `
+            INSERT INTO document_viewers (document_id, user_id, granted_by)
+            SELECT $1::uuid, selected.user_id, $3::uuid
+            FROM unnest($2::uuid[]) AS selected(user_id)
+            ON CONFLICT DO NOTHING
+          `,
+          [documentId, viewerIds, user.id],
+        );
+      }
       await client.query(
         `
           INSERT INTO document_versions (
@@ -268,13 +307,13 @@ export async function createDocument(user: AuthUser, formData: FormData) {
           )
           VALUES ($1, 1, $2, $3, $4, $5, $6)
         `,
-        [docResult.rows[0].id, file.name, file.size, file.type || null, key, user.id],
+        [documentId, file.name, file.size, file.type || null, key, user.id],
       );
       await client.query(
         "INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES ($1, 'document.created', 'document', $2)",
-        [user.id, docResult.rows[0].id],
+        [user.id, documentId],
       );
-      return { id: docResult.rows[0].id };
+      return { id: documentId };
     });
   } catch (error) {
     await deleteObject(key).catch(() => undefined);

@@ -31,6 +31,21 @@ jobs:
             --exclude='.env' \
             ./ "${{ secrets.CONTABO_USER }}@${{ secrets.CONTABO_HOST }}:/opt/pleng-dms/"
 
+      - name: Apply PostgreSQL schema
+        run: |
+          ssh -i ~/.ssh/contabo "${{ secrets.CONTABO_USER }}@${{ secrets.CONTABO_HOST }}" <<'REMOTE'
+          set -euo pipefail
+          cd /opt/pleng-dms
+          DATABASE_URL="$(grep -E '^DATABASE_URL=' .env | tail -1 | cut -d= -f2-)"
+          if [ -z "$DATABASE_URL" ]; then
+            echo "DATABASE_URL is missing in /opt/pleng-dms/.env" >&2
+            exit 1
+          fi
+          for file in db/postgres/*.sql; do
+            psql "$DATABASE_URL" -f "$file"
+          done
+          REMOTE
+
       - name: Build and restart backend
         run: |
           ssh -i ~/.ssh/contabo "${{ secrets.CONTABO_USER }}@${{ secrets.CONTABO_HOST }}" <<'REMOTE'

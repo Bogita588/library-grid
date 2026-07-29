@@ -398,6 +398,7 @@ function DocumentPage() {
                 }
               />
               <Row label="Department" value={doc.departments?.name ?? "—"} />
+              <Row label="Added by" value={doc.uploader?.full_name || doc.uploader?.email || "—"} />
               <Row label="Version" value={`V${doc.current_version}`} mono />
               <Row
                 label="Confidentiality"

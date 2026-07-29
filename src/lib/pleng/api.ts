@@ -34,6 +34,7 @@ export type DocumentRow = {
   department_id: string;
   departments?: { name: string; code: string; color: string | null } | null;
   publisher?: { full_name: string | null; email: string | null } | null;
+  uploader?: { full_name: string | null; email: string | null } | null;
 };
 
 export type Version = {

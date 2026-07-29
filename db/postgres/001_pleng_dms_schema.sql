@@ -203,7 +203,7 @@ CREATE TRIGGER documents_number_gen BEFORE INSERT ON documents
 INSERT INTO departments (name, slug, code, description, color)
 VALUES
   ('Administration', 'administration', 'ADM', 'Company administration and general records.', '#64748b'),
-  ('Construction', 'construction', 'CON', 'Construction execution, site records, and field documentation.', '#f97316'),
+  ('Architecture', 'architecture', 'ARC', 'Architectural drawings, concepts, designs, and related documentation.', '#2563eb'),
   ('Engineering', 'engineering', 'ENG', 'Engineering drawings, calculations, specifications, and technical records.', '#0f766e'),
   ('Finance', 'finance', 'FIN', 'Finance policies, controls, and reporting documents.', '#16a34a'),
   ('Health and Safety', 'health-and-safety', 'HSE', 'Safety procedures, incident records, and compliance documentation.', '#dc2626'),
@@ -211,8 +211,7 @@ VALUES
   ('Legal', 'legal', 'LEG', 'Contracts, legal notices, and governance records.', '#0f172a'),
   ('Operations', 'operations', 'OPS', 'Operating procedures, manuals, and business continuity documents.', '#0891b2'),
   ('Procurement', 'procurement', 'PRC', 'Supplier, purchasing, and contract administration documents.', '#ca8a04'),
-  ('Project Management', 'project-management', 'PMO', 'Schedules, reports, project controls, and delivery documentation.', '#7c3aed'),
-  ('Quality Assurance', 'quality-assurance', 'QA', 'Quality plans, inspection records, and audit documentation.', '#059669')
+  ('Quantity Surveying', 'quantity-surveying', 'QS', 'Quantity surveying, measurements, estimates, valuations, and cost control documents.', '#7c3aed')
 ON CONFLICT (slug) DO UPDATE
 SET name = EXCLUDED.name,
     code = EXCLUDED.code,

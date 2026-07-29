@@ -362,6 +362,10 @@ async function deleteCurrent(doc: DocRow, onDeleted: () => void) {
   }
 }
 
+function addedBy(doc: DocRow) {
+  return doc.uploader?.full_name || doc.uploader?.email || "Unknown user";
+}
+
 function DocCard({
   doc,
   canManageDocuments,
@@ -420,6 +424,9 @@ function DocCard({
             {doc.departments?.name ?? "Unassigned"}
           </div>
           {doc.confidentiality !== "public" && <Shield className="h-3 w-3 shrink-0 text-accent" />}
+        </div>
+        <div className="truncate text-[11px] font-semibold text-muted-foreground">
+          Added by <span className="text-foreground">{addedBy(doc)}</span>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           <button
@@ -511,6 +518,7 @@ function DocTable({
             <th className="px-4 py-3 text-left font-medium">Ref</th>
             <th className="px-4 py-3 text-left font-medium">Title</th>
             <th className="px-4 py-3 text-left font-medium">Dept</th>
+            <th className="px-4 py-3 text-left font-medium">Added by</th>
             <th className="px-4 py-3 text-left font-medium">Status</th>
             <th className="px-4 py-3 text-left font-medium">Ver</th>
             <th className="px-4 py-3 text-left font-medium">Updated</th>
@@ -532,6 +540,9 @@ function DocTable({
               </td>
               <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
                 {d.departments?.code}
+              </td>
+              <td className="max-w-[12rem] px-4 py-3 text-xs font-semibold text-muted-foreground">
+                <span className="line-clamp-1">{addedBy(d)}</span>
               </td>
               <td className="whitespace-nowrap px-4 py-3">
                 <StatusBadge status={d.status} />

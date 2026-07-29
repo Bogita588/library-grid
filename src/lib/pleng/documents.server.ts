@@ -14,6 +14,7 @@ const confidentiality = [
   "confidential",
   "strictly_confidential",
 ] as const;
+const hiddenDepartmentSlugs = ["construction", "project-management", "quality-assurance"];
 
 const listSchema = z.object({
   q: z.string().optional(),
@@ -47,6 +48,8 @@ type DocumentRow = {
   department_color: string | null;
   publisher_name: string | null;
   publisher_email: string | null;
+  uploader_name: string | null;
+  uploader_email: string | null;
 };
 
 type VersionRow = {
@@ -112,6 +115,13 @@ function mapDocument(row: DocumentRow) {
             email: row.publisher_email,
           }
         : null,
+    uploader:
+      row.uploaded_by && (row.uploader_name || row.uploader_email)
+        ? {
+            full_name: row.uploader_name,
+            email: row.uploader_email,
+          }
+        : null,
   };
 }
 
@@ -156,7 +166,10 @@ async function latestReadableVersion(user: AuthUser, documentId: string) {
 }
 
 export async function listDepartments() {
-  const { rows } = await query("SELECT * FROM departments ORDER BY name");
+  const { rows } = await query(
+    "SELECT * FROM departments WHERE slug <> ALL($1::text[]) ORDER BY name",
+    [hiddenDepartmentSlugs],
+  );
   return rows;
 }
 
@@ -185,10 +198,13 @@ export async function listDocuments(user: AuthUser, input: unknown) {
              dept.code AS department_code,
              dept.color AS department_color,
              pub.full_name AS publisher_name,
-             pub.email AS publisher_email
+             pub.email AS publisher_email,
+             uploader.full_name AS uploader_name,
+             uploader.email AS uploader_email
       FROM documents d
       JOIN departments dept ON dept.id = d.department_id
       LEFT JOIN app_users pub ON pub.id = d.published_by
+      LEFT JOIN app_users uploader ON uploader.id = d.uploaded_by
       WHERE ${where.join(" AND ")}
       ORDER BY d.updated_at DESC
       LIMIT 200
@@ -208,10 +224,13 @@ export async function getDocument(user: AuthUser, documentId: string) {
              dept.code AS department_code,
              dept.color AS department_color,
              pub.full_name AS publisher_name,
-             pub.email AS publisher_email
+             pub.email AS publisher_email,
+             uploader.full_name AS uploader_name,
+             uploader.email AS uploader_email
       FROM documents d
       JOIN departments dept ON dept.id = d.department_id
       LEFT JOIN app_users pub ON pub.id = d.published_by
+      LEFT JOIN app_users uploader ON uploader.id = d.uploaded_by
       WHERE d.id = $1 AND ${visible}
       LIMIT 1
     `,

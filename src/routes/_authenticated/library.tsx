@@ -417,16 +417,17 @@ function DocCard({
           Added by <span className="text-foreground">{addedBy(doc)}</span>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
-          <Link
-            to="/library/$docId"
-            params={{ docId: doc.id }}
+          <a
+            href={pdfPreviewHref(doc.id)}
+            target="_blank"
+            rel="noreferrer"
             title="View document"
             aria-label={`View ${doc.title}`}
             className="inline-flex h-8 items-center justify-center gap-1.5 rounded-sm border border-input bg-card px-2.5 text-xs font-bold text-muted-foreground shadow-sm transition-colors hover:border-primary/50 hover:bg-primary hover:text-primary-foreground"
           >
             <Eye className="h-3.5 w-3.5" />
             View
-          </Link>
+          </a>
           <button
             onClick={(e) => {
               e.preventDefault();
@@ -540,9 +541,10 @@ function DocTable({
               </td>
               <td className="px-4 py-3">
                 <div className="flex items-center justify-end gap-1.5">
-                  <Link
-                    to="/library/$docId"
-                    params={{ docId: d.id }}
+                  <a
+                    href={pdfPreviewHref(d.id)}
+                    target="_blank"
+                    rel="noreferrer"
                     onClick={(e) => {
                       e.stopPropagation();
                     }}
@@ -551,7 +553,7 @@ function DocTable({
                     className="inline-flex h-8 w-8 items-center justify-center rounded-sm border border-input bg-card text-muted-foreground shadow-sm transition-colors hover:border-primary/50 hover:bg-primary hover:text-primary-foreground"
                   >
                     <Eye className="h-3.5 w-3.5" />
-                  </Link>
+                  </a>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -713,6 +715,10 @@ function UploadModal({
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!file || !title || !deptId) return;
+    if (!isPdfUpload(file)) {
+      toast.error("Only PDF files can be uploaded");
+      return;
+    }
     setUploading(true);
     try {
       const formData = new FormData();
@@ -725,7 +731,7 @@ function UploadModal({
       if (isRestricted) formData.set("viewer_ids", JSON.stringify(viewerIds));
 
       await uploadDocument(formData);
-      toast.success("Document uploaded");
+      toast.success("PDF uploaded");
       onUploaded();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed");
@@ -758,9 +764,15 @@ function UploadModal({
             <input
               type="file"
               required
-              accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.png,.jpg,.jpeg"
+              accept="application/pdf,.pdf"
               onChange={(e) => {
                 const f = e.target.files?.[0] ?? null;
+                if (f && !isPdfUpload(f)) {
+                  toast.error("Only PDF files can be uploaded");
+                  e.target.value = "";
+                  setFile(null);
+                  return;
+                }
                 setFile(f);
                 if (f && !title) setTitle(f.name.replace(/\.[^/.]+$/, ""));
               }}
@@ -904,6 +916,14 @@ function Input({
       )}
     </label>
   );
+}
+
+function isPdfUpload(file: File) {
+  return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+}
+
+function pdfPreviewHref(docId: string) {
+  return `/api/documents/${encodeURIComponent(docId)}/preview`;
 }
 
 function Select({

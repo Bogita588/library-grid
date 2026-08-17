@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   DOCUMENT_STATUSES,
   type DocumentStatus,
@@ -12,7 +12,6 @@ import {
   deleteDocument as deleteDocumentApi,
   documentDownloadUrl,
   documentVersionDownloadUrl,
-  documentViewUrl,
   getDocument,
   getFavorite,
   removeFavorite,
@@ -33,17 +32,9 @@ import {
   Star,
   Mail,
   MessageCircle,
+  Eye,
 } from "lucide-react";
 import { toast } from "sonner";
-
-type DocumentPreview = {
-  url: string | null;
-  mimeType: string;
-  fileName: string;
-  standardized: boolean;
-  processing: boolean;
-  previewError: string | null;
-};
 
 export const Route = createFileRoute("/_authenticated/library/$docId")({
   head: () => ({ meta: [{ title: "Document · Pleng Limited" }] }),
@@ -54,10 +45,6 @@ function DocumentPage() {
   const { docId } = Route.useParams();
   const router = useRouter();
   const qc = useQueryClient();
-  const [preview, setPreview] = useState<DocumentPreview | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewError, setPreviewError] = useState<string | null>(null);
-  const [previewAttempt, setPreviewAttempt] = useState(0);
   const [uploadingNewVersion, setUploadingNewVersion] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
 
@@ -119,48 +106,6 @@ function DocumentPage() {
     }
   }
 
-  // Sign the current version for preview. Large Office files may need a server-side
-  // PDF generation pass before the iframe can load.
-  useEffect(() => {
-    let cancelled = false;
-    let pollTimer: ReturnType<typeof setTimeout> | undefined;
-
-    if (!currentVersion) {
-      setPreview(null);
-      setPreviewLoading(false);
-      setPreviewError(null);
-      return;
-    }
-
-    async function loadPreview() {
-      setPreviewLoading(true);
-      setPreviewError(null);
-      try {
-        const nextPreview = await documentViewUrl(docId);
-        if (cancelled) return;
-        setPreview(nextPreview);
-        if (nextPreview.processing) {
-          pollTimer = setTimeout(loadPreview, 3000);
-          return;
-        }
-        setPreviewLoading(false);
-      } catch (error) {
-        if (!cancelled) {
-          setPreview(null);
-          setPreviewLoading(false);
-          setPreviewError(error instanceof Error ? error.message : "Could not prepare preview");
-        }
-      }
-    }
-
-    void loadPreview();
-
-    return () => {
-      cancelled = true;
-      if (pollTimer) clearTimeout(pollTimer);
-    };
-  }, [currentVersion?.id, docId, previewAttempt]);
-
   async function downloadVersion(v: Version) {
     if (!isAdmin) {
       toast.error("Only admins can download documents");
@@ -206,6 +151,11 @@ function DocumentPage() {
   async function onNewVersion(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !doc) return;
+    if (!isPdfUpload(file)) {
+      toast.error("Only PDF files can be uploaded");
+      e.target.value = "";
+      return;
+    }
     if (!userId || !canEditDocument || !canContribute) {
       toast.error("You do not have permission to upload a new version");
       e.target.value = "";
@@ -281,15 +231,14 @@ function DocumentPage() {
     );
   }
 
-  const mime = currentVersion?.mime_type ?? "";
-  const previewMime = preview?.mimeType ?? "";
-  const isPdf = previewMime === "application/pdf";
-  const isImage = previewMime.startsWith("image/");
-  const isText = previewMime.startsWith("text/") || previewMime === "application/json";
-  const isOffice = currentVersion ? isOfficeDocument(currentVersion.file_name, mime) : false;
+  const previewMime = currentVersion?.preview_mime_type || currentVersion?.mime_type || "";
+  const canViewPdf = currentVersion ? isPdfVersion(currentVersion) : false;
+  const viewerUrl = canViewPdf
+    ? `/api/documents/${docId}/preview?v=${encodeURIComponent(currentVersion.id)}`
+    : null;
 
   return (
-    <div className="flex-1 flex flex-col min-h-0">
+    <div className="flex h-[calc(100dvh-3.5rem)] min-h-[38rem] flex-col xl:h-dvh">
       <header className="border-b border-border bg-card/50 backdrop-blur flex flex-wrap items-center gap-2 px-4 py-3 sm:px-6 shrink-0">
         <Link
           to="/library"
@@ -318,7 +267,7 @@ function DocumentPage() {
               <input
                 type="file"
                 hidden
-                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.png,.jpg,.jpeg"
+                accept="application/pdf,.pdf"
                 onChange={onNewVersion}
                 disabled={uploadingNewVersion}
               />
@@ -326,14 +275,28 @@ function DocumentPage() {
           )}
 
           {currentVersion && (
-            <button
-              onClick={downloadCurrentDocument}
-              title="Download PDF"
-              className="inline-flex h-8 items-center gap-1.5 rounded-sm bg-primary px-2.5 text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/90"
-            >
-              <Download className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Download</span>
-            </button>
+            <>
+              {viewerUrl && (
+                <a
+                  href={viewerUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  title="View PDF"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-sm bg-primary px-2.5 text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/90"
+                >
+                  <Eye className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">View</span>
+                </a>
+              )}
+              <button
+                onClick={downloadCurrentDocument}
+                title="Download PDF"
+                className="inline-flex h-8 items-center gap-1.5 rounded-sm border border-input px-2.5 text-xs font-bold uppercase tracking-wider text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <Download className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Download</span>
+              </button>
+            </>
           )}
 
           {isAdmin && (
@@ -382,71 +345,20 @@ function DocumentPage() {
 
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-[1fr_320px] min-h-0">
         {/* Preview */}
-        <div className="min-h-0 overflow-hidden bg-muted/30 border-r border-border">
+        <div className="min-h-[70dvh] overflow-hidden border-r border-border bg-slate-100 lg:min-h-0">
           {!currentVersion ? (
             <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
               No file attached.
             </div>
-          ) : previewLoading || preview?.processing ? (
-            <div className="h-full flex flex-col items-center justify-center gap-3 px-6 text-center text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin" />
-              <div>
-                <div className="text-sm font-semibold text-foreground">
-                  {preview?.processing ? "Generating PDF preview" : "Preparing preview"}
-                </div>
-                <div className="mt-1 max-w-sm text-xs leading-relaxed">
-                  {preview?.processing
-                    ? "Large Word, Excel, or PowerPoint files can take about a minute the first time they are opened."
-                    : "Opening the document viewer."}
-                </div>
-              </div>
-            </div>
-          ) : previewError ? (
-            <div className="h-full flex flex-col items-center justify-center gap-4 px-6 text-center">
-              <div className="h-14 w-14 rounded-sm border-2 border-dashed border-border flex items-center justify-center">
-                <FileText className="h-6 w-6 text-muted-foreground" />
-              </div>
-              <div>
-                <div className="text-sm font-semibold">Preview could not load</div>
-                <div className="mt-1 text-xs text-muted-foreground">{previewError}</div>
-              </div>
-              <button
-                onClick={() => setPreviewAttempt((attempt) => attempt + 1)}
-                className="inline-flex items-center gap-1.5 rounded-sm bg-primary px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/90"
-              >
-                Try again
-              </button>
-            </div>
-          ) : !preview?.url ? (
+          ) : !viewerUrl ? (
             <PreviewUnavailable
-              isOffice={isOffice}
-              mime={mime}
               previewMime={previewMime}
-              conversionError={preview?.previewError}
+              conversionError={currentVersion.preview_error}
               currentVersion={currentVersion}
               onDownload={downloadCurrentDocument}
             />
-          ) : isPdf ? (
-            <iframe src={preview.url} className="w-full h-full" title={doc.title} />
-          ) : isImage ? (
-            <div className="w-full h-full flex items-center justify-center p-6">
-              <img
-                src={preview.url}
-                alt={doc.title}
-                className="max-w-full max-h-full object-contain"
-              />
-            </div>
-          ) : isText ? (
-            <iframe src={preview.url} className="w-full h-full bg-background" title={doc.title} />
           ) : (
-            <PreviewUnavailable
-              isOffice={isOffice}
-              mime={mime}
-              previewMime={previewMime}
-              conversionError={preview?.previewError}
-              currentVersion={currentVersion}
-              onDownload={downloadCurrentDocument}
-            />
+            <iframe src={viewerUrl} className="h-full w-full bg-white" title={doc.title} />
           )}
         </div>
 
@@ -564,15 +476,11 @@ function Row({ label, value, mono }: { label: string; value: React.ReactNode; mo
 }
 
 function PreviewUnavailable({
-  isOffice,
-  mime,
   previewMime,
   conversionError,
   currentVersion,
   onDownload,
 }: {
-  isOffice: boolean;
-  mime: string;
   previewMime: string;
   conversionError?: string | null;
   currentVersion: Version;
@@ -586,9 +494,9 @@ function PreviewUnavailable({
       <div>
         <div className="text-sm font-semibold">Preview not available</div>
         <div className="text-xs text-muted-foreground mt-1">
-          {isOffice
-            ? "A PDF preview could not be generated for this Office document."
-            : `This file type (${mime || previewMime || "unknown"}) can't be previewed in the browser.`}
+          {previewMime
+            ? `This file type (${previewMime}) cannot be shown in the PDF viewer.`
+            : "Only PDF documents can be shown in the viewer."}
         </div>
       </div>
       <button
@@ -613,17 +521,14 @@ function formatSize(bytes: number): string {
   return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
 }
 
-function isOfficeDocument(fileName: string, mime: string) {
-  const extension = fileName.split(".").pop()?.toLowerCase();
+function isPdfUpload(file: File) {
+  return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+}
+
+function isPdfVersion(version: Version) {
   return (
-    ["doc", "docx", "xls", "xlsx", "ppt", "pptx"].includes(extension ?? "") ||
-    [
-      "application/msword",
-      "application/vnd.ms-excel",
-      "application/vnd.ms-powerpoint",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    ].includes(mime)
+    version.preview_mime_type === "application/pdf" ||
+    version.mime_type === "application/pdf" ||
+    version.file_name.toLowerCase().endsWith(".pdf")
   );
 }

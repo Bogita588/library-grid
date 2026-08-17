@@ -89,6 +89,7 @@ export async function signedViewUrl(key: string, fileName: string) {
       Bucket: bucket(),
       Key: key,
       ResponseContentDisposition: contentDisposition("inline", fileName),
+      ResponseContentType: "application/pdf",
     }),
     { expiresIn: 60 * 10 },
   );

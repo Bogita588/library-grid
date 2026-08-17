@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { listFavorites } from "@/lib/pleng/api";
 import { Star, FileText } from "lucide-react";
@@ -46,10 +46,11 @@ function FavoritesPage() {
               const d = f.documents!;
               const color = d.departments?.color ?? "oklch(0.43 0.13 198)";
               return (
-                <Link
+                <a
                   key={f.id}
-                  to="/library/$docId"
-                  params={{ docId: d.id }}
+                  href={pdfPreviewHref(d.id)}
+                  target="_blank"
+                  rel="noreferrer"
                   className="group bg-card border border-border rounded-sm p-4 hover:border-primary/50 hover:shadow-sm transition-all block"
                 >
                   <div className="flex items-start justify-between mb-3">
@@ -70,7 +71,7 @@ function FavoritesPage() {
                   <div className="mt-3 pt-3 border-t border-border text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
                     V{d.current_version} · {d.departments?.code}
                   </div>
-                </Link>
+                </a>
               );
             })}
           </div>
@@ -78,4 +79,8 @@ function FavoritesPage() {
       </div>
     </div>
   );
+}
+
+function pdfPreviewHref(docId: string) {
+  return `/api/documents/${encodeURIComponent(docId)}/preview`;
 }

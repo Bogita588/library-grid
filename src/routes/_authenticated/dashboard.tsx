@@ -50,10 +50,11 @@ function DashboardPage() {
                 </div>
               )}
               {stats?.recent.map((d) => (
-                <Link
+                <a
                   key={d.id}
-                  to="/library/$docId"
-                  params={{ docId: d.id }}
+                  href={pdfPreviewHref(d.id)}
+                  target="_blank"
+                  rel="noreferrer"
                   className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/40"
                 >
                   <div
@@ -75,7 +76,7 @@ function DashboardPage() {
                   <div className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
                     {new Date(d.updated_at).toLocaleDateString()}
                   </div>
-                </Link>
+                </a>
               ))}
             </div>
           </section>
@@ -131,6 +132,10 @@ function DashboardPage() {
       </div>
     </div>
   );
+}
+
+function pdfPreviewHref(docId: string) {
+  return `/api/documents/${encodeURIComponent(docId)}/preview`;
 }
 
 function Stat({

@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { z } from "zod";
@@ -57,7 +57,6 @@ export const Route = createFileRoute("/_authenticated/library")({
 
 function LibraryPage() {
   const { q, dept, status } = Route.useSearch();
-  const navigate = Route.useNavigate();
   const [view, setView] = useState<"grid" | "list">("grid");
   const [uploadOpen, setUploadOpen] = useState(false);
   const qc = useQueryClient();
@@ -326,12 +325,12 @@ async function downloadCurrent(docId: string) {
   window.open(signedUrl, "_blank");
 }
 
-function documentPageUrl(docId: string) {
-  return new URL(`/library/${docId}`, window.location.origin).toString();
+function documentPreviewUrl(docId: string) {
+  return new URL(pdfPreviewHref(docId), window.location.origin).toString();
 }
 
 async function shareCurrent(doc: DocRow, channel: "whatsapp" | "email") {
-  const message = `${doc.title}\n${documentPageUrl(doc.id)}`;
+  const message = `${doc.title}\n${documentPreviewUrl(doc.id)}`;
   if (channel === "whatsapp") {
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank", "noopener");
     return;
@@ -366,7 +365,16 @@ function DocCard({
   const color = doc.departments?.color ?? "oklch(0.43 0.13 198)";
   return (
     <article
-      className="library-card group flex h-full min-h-[17rem] flex-col rounded-lg animate-reveal"
+      role="link"
+      tabIndex={0}
+      onClick={() => openPdfPreview(doc.id)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          openPdfPreview(doc.id);
+        }
+      }}
+      className="library-card group flex h-full min-h-[17rem] cursor-pointer flex-col rounded-lg animate-reveal"
       style={{ "--dept-color": color } as React.CSSProperties}
     >
       <div className="library-spine absolute inset-y-0 left-0 w-1.5" />
@@ -378,11 +386,7 @@ function DocCard({
           <StatusBadge status={doc.status} />
         </div>
 
-        <Link
-          to="/library/$docId"
-          params={{ docId: doc.id }}
-          className="block rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
+        <div className="block rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring">
           <div className="mb-1 font-mono text-[10px] uppercase text-muted-foreground">
             {doc.document_number ?? "—"}
           </div>
@@ -394,7 +398,7 @@ function DocCard({
               {doc.description}
             </p>
           )}
-        </Link>
+        </div>
 
         <div className="mt-4 flex flex-wrap gap-1.5">
           <span className="rounded-sm border border-border bg-secondary px-2 py-1 text-[10px] font-mono uppercase text-muted-foreground">
@@ -421,6 +425,9 @@ function DocCard({
             href={pdfPreviewHref(doc.id)}
             target="_blank"
             rel="noreferrer"
+            onClick={(e) => {
+              e.stopPropagation();
+            }}
             title="View document"
             aria-label={`View ${doc.title}`}
             className="inline-flex h-8 items-center justify-center gap-1.5 rounded-sm border border-input bg-card px-2.5 text-xs font-bold text-muted-foreground shadow-sm transition-colors hover:border-primary/50 hover:bg-primary hover:text-primary-foreground"
@@ -495,7 +502,6 @@ function DocTable({
   canManageDocuments: boolean;
   onDeleted: () => void;
 }) {
-  const navigate = useNavigate();
   return (
     <div className="library-table overflow-x-auto rounded-lg">
       <table className="w-full text-sm">
@@ -515,7 +521,7 @@ function DocTable({
           {docs.map((d) => (
             <tr
               key={d.id}
-              onClick={() => navigate({ to: "/library/$docId", params: { docId: d.id } })}
+              onClick={() => openPdfPreview(d.id)}
               className="group cursor-pointer transition-colors hover:bg-secondary/70"
             >
               <td className="whitespace-nowrap px-4 py-3 font-mono text-[11px] text-muted-foreground">
@@ -924,6 +930,12 @@ function isPdfUpload(file: File) {
 
 function pdfPreviewHref(docId: string) {
   return `/api/documents/${encodeURIComponent(docId)}/preview`;
+}
+
+function openPdfPreview(docId: string) {
+  const url = pdfPreviewHref(docId);
+  const opened = window.open(url, "_blank", "noopener");
+  if (!opened) window.location.href = url;
 }
 
 function Select({

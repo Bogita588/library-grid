@@ -152,8 +152,8 @@ function AdminPage() {
                   <span className="font-mono font-semibold text-foreground">
                     {DEFAULT_LIBRARY_PASSWORD}
                   </span>
-                  . Normal users can upload, search, and view documents. Admins can also download,
-                  delete, and share.
+                  . Normal users can upload, search, view, and download PDF documents. Admins can
+                  also delete and share.
                 </div>
                 <button
                   type="submit"

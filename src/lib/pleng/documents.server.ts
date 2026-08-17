@@ -96,6 +96,8 @@ type ViewUrlResult = {
   previewError: string | null;
 };
 
+type PdfFileResult = ViewUrlResult;
+
 function visibilityWhere(user: AuthUser, params: unknown[]) {
   if (isAdmin(user)) {
     return "TRUE";
@@ -168,6 +170,18 @@ function previewObjectKey(departmentId: string, fileId: string, fileName: string
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message.slice(0, 500) : "Preview conversion failed";
+}
+
+function isPdfFile(fileName: string, mimeType: string | null | undefined) {
+  return (
+    (mimeType || "").toLowerCase() === "application/pdf" || fileName.toLowerCase().endsWith(".pdf")
+  );
+}
+
+function requirePdfConvertible(file: File) {
+  if (!canCreatePdfPreview(file.name, file.type || null)) {
+    throw new ApiError(400, "Upload a PDF, Word, Excel, PowerPoint, text, CSV, PNG, or JPG file.");
+  }
 }
 
 function requireFile(value: FormDataEntryValue | null) {
@@ -332,6 +346,16 @@ async function previewInfo(version: VersionRow) {
     };
   }
 
+  if (isPdfFile(version.file_name, version.mime_type)) {
+    return {
+      fileName: pdfPreviewFileName(version.file_name),
+      mimeType: "application/pdf",
+      standardized: true,
+      processing: false,
+      previewError: null,
+    };
+  }
+
   if (canCreatePdfPreview(version.file_name, version.mime_type)) {
     if (version.preview_error && !previewJobs.has(version.id)) {
       return {
@@ -373,27 +397,84 @@ async function previewPayload(version: VersionRow) {
     };
   }
 
-  const object = await readObject(version.storage_path);
-  const generated = await generateAndStorePreview(
-    version,
-    Buffer.from(object.bytes),
-    object.contentType,
-  );
-
-  if (generated) {
+  if (isPdfFile(version.file_name, version.mime_type)) {
+    const object = await readObject(version.storage_path);
     return {
-      bytes: generated.bytes,
-      contentLength: generated.fileSize,
-      fileName: generated.fileName,
-      mimeType: generated.mimeType,
+      bytes: object.bytes,
+      contentLength: object.contentLength,
+      fileName: pdfPreviewFileName(version.file_name),
+      mimeType: "application/pdf",
     };
   }
 
+  if (canCreatePdfPreview(version.file_name, version.mime_type)) {
+    queuePreviewGeneration(version);
+    throw new ApiError(409, "PDF preview is still being generated");
+  }
+
+  const object = await readObject(version.storage_path);
   return {
     bytes: object.bytes,
     contentLength: object.contentLength,
     fileName: version.file_name,
     mimeType: version.mime_type || object.contentType || "application/octet-stream",
+  };
+}
+
+async function pdfDownloadInfo(version: VersionRow): Promise<PdfFileResult> {
+  if (version.preview_storage_path && version.preview_file_name && version.preview_mime_type) {
+    return {
+      url: await signedDownloadUrl(version.preview_storage_path, version.preview_file_name),
+      mimeType: version.preview_mime_type,
+      fileName: version.preview_file_name,
+      standardized: true,
+      processing: false,
+      previewError: null,
+    };
+  }
+
+  if (isPdfFile(version.file_name, version.mime_type)) {
+    const fileName = pdfPreviewFileName(version.file_name);
+    return {
+      url: await signedDownloadUrl(version.storage_path, fileName),
+      mimeType: "application/pdf",
+      fileName,
+      standardized: true,
+      processing: false,
+      previewError: null,
+    };
+  }
+
+  if (canCreatePdfPreview(version.file_name, version.mime_type)) {
+    if (version.preview_error && !previewJobs.has(version.id)) {
+      return {
+        url: null,
+        mimeType: "application/pdf",
+        fileName: pdfPreviewFileName(version.file_name),
+        standardized: true,
+        processing: false,
+        previewError: version.preview_error,
+      };
+    }
+
+    queuePreviewGeneration(version);
+    return {
+      url: null,
+      mimeType: "application/pdf",
+      fileName: pdfPreviewFileName(version.file_name),
+      standardized: true,
+      processing: true,
+      previewError: version.preview_error,
+    };
+  }
+
+  return {
+    url: null,
+    mimeType: version.mime_type || "application/octet-stream",
+    fileName: version.file_name,
+    standardized: false,
+    processing: false,
+    previewError: "This file cannot be converted to PDF",
   };
 }
 
@@ -534,6 +615,7 @@ export async function createDocument(user: AuthUser, formData: FormData) {
   if (!canContribute(user)) throw new ApiError(403, "You cannot upload documents");
 
   const file = requireFile(formData.get("file"));
+  requirePdfConvertible(file);
   const parsed = z
     .object({
       title: z.string().min(1),
@@ -551,22 +633,16 @@ export async function createDocument(user: AuthUser, formData: FormData) {
   const fileId = crypto.randomUUID();
   const fileBytes = Buffer.from(await file.arrayBuffer());
   const key = `${parsed.department_id}/${fileId}-${safeFileName(file.name)}`;
+  const uploadedPdf = isPdfFile(file.name, file.type || null);
   await uploadBuffer({
     key,
     body: fileBytes,
     contentLength: fileBytes.byteLength,
     contentType: file.type || "application/octet-stream",
   });
-  const previewResult = await createUploadedPreview({
-    departmentId: parsed.department_id,
-    fileId,
-    fileName: file.name,
-    mimeType: file.type || null,
-    bytes: fileBytes,
-  });
 
   try {
-    return await transaction(async (client) => {
+    const result = await transaction(async (client) => {
       const adminUpload = isAdmin(user);
       const initialStatus = adminUpload ? "published" : "draft";
       const docResult = await client.query<{ id: string }>(
@@ -613,7 +689,7 @@ export async function createDocument(user: AuthUser, formData: FormData) {
           [documentId, viewerIds, user.id],
         );
       }
-      await client.query(
+      const versionResult = await client.query<{ id: string }>(
         `
           INSERT INTO document_versions (
             document_id, version_number, file_name, file_size, mime_type, storage_path, uploaded_by,
@@ -626,6 +702,7 @@ export async function createDocument(user: AuthUser, formData: FormData) {
             CASE WHEN $7::text IS NULL THEN NULL ELSE now() END,
             $11
           )
+          RETURNING id
         `,
         [
           documentId,
@@ -634,24 +711,43 @@ export async function createDocument(user: AuthUser, formData: FormData) {
           file.type || null,
           key,
           user.id,
-          previewResult.preview?.storagePath ?? null,
-          previewResult.preview?.fileName ?? null,
-          previewResult.preview?.fileSize ?? null,
-          previewResult.preview?.mimeType ?? null,
-          previewResult.error,
+          uploadedPdf ? key : null,
+          uploadedPdf ? pdfPreviewFileName(file.name) : null,
+          uploadedPdf ? fileBytes.byteLength : null,
+          uploadedPdf ? "application/pdf" : null,
+          null,
         ],
       );
       await client.query(
         "INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES ($1, 'document.created', 'document', $2)",
         [user.id, documentId],
       );
-      return { id: documentId };
+      return { id: documentId, versionId: versionResult.rows[0].id };
     });
+
+    if (!uploadedPdf) {
+      queuePreviewGeneration({
+        id: result.versionId,
+        document_id: result.id,
+        department_id: parsed.department_id,
+        version_number: 1,
+        storage_path: key,
+        file_name: file.name,
+        file_size: fileBytes.byteLength,
+        mime_type: file.type || null,
+        preview_storage_path: null,
+        preview_file_name: null,
+        preview_file_size: null,
+        preview_mime_type: null,
+        preview_generated_at: null,
+        preview_error: null,
+        created_at: new Date().toISOString(),
+      });
+    }
+
+    return { id: result.id };
   } catch (error) {
     await deleteObject(key).catch(() => undefined);
-    if (previewResult.preview?.storagePath) {
-      await deleteObject(previewResult.preview.storagePath).catch(() => undefined);
-    }
     throw error;
   }
 }
@@ -664,27 +760,22 @@ export async function addVersion(user: AuthUser, documentId: string, formData: F
   }
 
   const file = requireFile(formData.get("file"));
+  requirePdfConvertible(file);
   const fileId = crypto.randomUUID();
   const fileBytes = Buffer.from(await file.arrayBuffer());
   const key = `${doc.department_id}/${fileId}-${safeFileName(file.name)}`;
+  const uploadedPdf = isPdfFile(file.name, file.type || null);
   await uploadBuffer({
     key,
     body: fileBytes,
     contentLength: fileBytes.byteLength,
     contentType: file.type || "application/octet-stream",
   });
-  const previewResult = await createUploadedPreview({
-    departmentId: doc.department_id,
-    fileId,
-    fileName: file.name,
-    mimeType: file.type || null,
-    bytes: fileBytes,
-  });
 
   try {
-    return await transaction(async (client) => {
+    const result = await transaction(async (client) => {
       const nextVersion = Number(doc.current_version) + 1;
-      await client.query(
+      const versionResult = await client.query<{ id: string }>(
         `
           INSERT INTO document_versions (
             document_id, version_number, file_name, file_size, mime_type, storage_path, uploaded_by,
@@ -697,6 +788,7 @@ export async function addVersion(user: AuthUser, documentId: string, formData: F
             CASE WHEN $8::text IS NULL THEN NULL ELSE now() END,
             $12
           )
+          RETURNING id
         `,
         [
           documentId,
@@ -706,11 +798,11 @@ export async function addVersion(user: AuthUser, documentId: string, formData: F
           file.type || null,
           key,
           user.id,
-          previewResult.preview?.storagePath ?? null,
-          previewResult.preview?.fileName ?? null,
-          previewResult.preview?.fileSize ?? null,
-          previewResult.preview?.mimeType ?? null,
-          previewResult.error,
+          uploadedPdf ? key : null,
+          uploadedPdf ? pdfPreviewFileName(file.name) : null,
+          uploadedPdf ? fileBytes.byteLength : null,
+          uploadedPdf ? "application/pdf" : null,
+          null,
         ],
       );
       await client.query("UPDATE documents SET current_version = $1 WHERE id = $2", [
@@ -721,13 +813,32 @@ export async function addVersion(user: AuthUser, documentId: string, formData: F
         "INSERT INTO audit_logs (user_id, action, entity_type, entity_id, metadata) VALUES ($1, 'document.version_added', 'document', $2, $3)",
         [user.id, documentId, JSON.stringify({ version: nextVersion })],
       );
-      return { ok: true, version: nextVersion };
+      return { ok: true, version: nextVersion, versionId: versionResult.rows[0].id };
     });
+
+    if (!uploadedPdf) {
+      queuePreviewGeneration({
+        id: result.versionId,
+        document_id: documentId,
+        department_id: doc.department_id,
+        version_number: result.version,
+        storage_path: key,
+        file_name: file.name,
+        file_size: fileBytes.byteLength,
+        mime_type: file.type || null,
+        preview_storage_path: null,
+        preview_file_name: null,
+        preview_file_size: null,
+        preview_mime_type: null,
+        preview_generated_at: null,
+        preview_error: null,
+        created_at: new Date().toISOString(),
+      });
+    }
+
+    return { ok: true, version: result.version };
   } catch (error) {
     await deleteObject(key).catch(() => undefined);
-    if (previewResult.preview?.storagePath) {
-      await deleteObject(previewResult.preview.storagePath).catch(() => undefined);
-    }
     throw error;
   }
 }
@@ -802,10 +913,9 @@ export async function previewFileFromToken(documentId: string, token: string) {
   return previewPayload(version);
 }
 
-export async function downloadUrl(user: AuthUser, documentId: string) {
-  if (!isAdmin(user)) throw new ApiError(403, "Only admins can download documents");
+export async function downloadUrl(user: AuthUser, documentId: string): Promise<PdfFileResult> {
   const version = await latestReadableVersion(user, documentId);
-  return { url: await signedDownloadUrl(version.storage_path, version.file_name) };
+  return pdfDownloadInfo(version);
 }
 
 export async function versionDownloadUrl(user: AuthUser, versionId: string) {

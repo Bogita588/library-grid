@@ -303,7 +303,16 @@ function LibraryMetric({ label, value }: { label: string; value: number }) {
 
 async function createDownloadSignedUrl(docId: string) {
   try {
-    const { url } = await documentDownloadUrl(docId);
+    const result = await documentDownloadUrl(docId);
+    if (result.processing) {
+      toast.info("PDF is being generated. Try downloading again in a moment.");
+      return null;
+    }
+    if (!result.url) {
+      toast.error(result.previewError || "PDF download is not available for this document");
+      return null;
+    }
+    const { url } = result;
     return url;
   } catch (err) {
     toast.error(err instanceof Error ? err.message : "Could not create download link");
@@ -418,6 +427,18 @@ function DocCard({
             <Eye className="h-3.5 w-3.5" />
             View
           </Link>
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              downloadCurrent(doc.id);
+            }}
+            title="Download PDF"
+            aria-label={`Download ${doc.title} as PDF`}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-sm border border-input bg-card text-muted-foreground shadow-sm transition-colors hover:border-primary/50 hover:bg-accent hover:text-accent-foreground"
+          >
+            <Download className="h-3.5 w-3.5" />
+          </button>
           {canManageDocuments && (
             <>
               <button
@@ -443,18 +464,6 @@ function DocCard({
                 className="inline-flex h-8 w-8 items-center justify-center rounded-sm border border-input bg-card text-muted-foreground shadow-sm transition-colors hover:border-primary/50 hover:bg-primary hover:text-primary-foreground"
               >
                 <Mail className="h-3.5 w-3.5" />
-              </button>
-              <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  downloadCurrent(doc.id);
-                }}
-                title="Download"
-                aria-label={`Download ${doc.title}`}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-sm border border-input bg-card text-muted-foreground shadow-sm transition-colors hover:border-primary/50 hover:bg-accent hover:text-accent-foreground"
-              >
-                <Download className="h-3.5 w-3.5" />
               </button>
               <button
                 onClick={(e) => {
@@ -543,6 +552,17 @@ function DocTable({
                   >
                     <Eye className="h-3.5 w-3.5" />
                   </Link>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      downloadCurrent(d.id);
+                    }}
+                    title="Download PDF"
+                    aria-label={`Download ${d.title} as PDF`}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-sm border border-input bg-card text-muted-foreground shadow-sm transition-colors hover:border-primary/50 hover:bg-accent hover:text-accent-foreground"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                  </button>
                   {canManageDocuments && (
                     <>
                       <button
@@ -566,17 +586,6 @@ function DocTable({
                         className="inline-flex h-8 w-8 items-center justify-center rounded-sm border border-input bg-card text-muted-foreground shadow-sm transition-colors hover:border-primary/50 hover:bg-primary hover:text-primary-foreground"
                       >
                         <Mail className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          downloadCurrent(d.id);
-                        }}
-                        title="Download"
-                        aria-label={`Download ${d.title}`}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-sm border border-input bg-card text-muted-foreground shadow-sm transition-colors hover:border-primary/50 hover:bg-accent hover:text-accent-foreground"
-                      >
-                        <Download className="h-3.5 w-3.5" />
                       </button>
                       <button
                         onClick={(e) => {
@@ -749,6 +758,7 @@ function UploadModal({
             <input
               type="file"
               required
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.png,.jpg,.jpeg"
               onChange={(e) => {
                 const f = e.target.files?.[0] ?? null;
                 setFile(f);

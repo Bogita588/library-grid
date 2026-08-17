@@ -161,7 +161,14 @@ export async function documentViewUrl(docId: string) {
 }
 
 export async function documentDownloadUrl(docId: string) {
-  return api<{ url: string }>(`/api/documents/${docId}/download-url`);
+  return api<{
+    url: string | null;
+    mimeType: string;
+    fileName: string;
+    standardized: boolean;
+    processing: boolean;
+    previewError: string | null;
+  }>(`/api/documents/${docId}/download-url`);
 }
 
 export async function documentVersionDownloadUrl(versionId: string) {

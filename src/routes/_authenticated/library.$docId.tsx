@@ -10,6 +10,7 @@ import {
   addFavorite,
   currentUser,
   deleteDocument as deleteDocumentApi,
+  documentDownloadUrl,
   documentVersionDownloadUrl,
   documentViewUrl,
   getDocument,
@@ -173,6 +174,24 @@ function DocumentPage() {
     }
   }
 
+  async function downloadCurrentDocument() {
+    if (!doc) return;
+    try {
+      const result = await documentDownloadUrl(doc.id);
+      if (result.processing) {
+        toast.info("PDF is being generated. Try downloading again in a moment.");
+        return;
+      }
+      if (!result.url) {
+        toast.error(result.previewError || "PDF download is not available for this document");
+        return;
+      }
+      window.open(result.url, "_blank");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not create download link");
+    }
+  }
+
   function shareDocument(channel: "email" | "whatsapp") {
     if (!doc || !isAdmin) return;
     const url = new URL(`/library/${doc.id}`, window.location.origin).toString();
@@ -296,14 +315,20 @@ function DocumentPage() {
                 <Upload className="h-3.5 w-3.5" />
               )}
               <span className="hidden sm:inline">New version</span>
-              <input type="file" hidden onChange={onNewVersion} disabled={uploadingNewVersion} />
+              <input
+                type="file"
+                hidden
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.png,.jpg,.jpeg"
+                onChange={onNewVersion}
+                disabled={uploadingNewVersion}
+              />
             </label>
           )}
 
-          {currentVersion && isAdmin && (
+          {currentVersion && (
             <button
-              onClick={() => downloadVersion(currentVersion)}
-              title="Download"
+              onClick={downloadCurrentDocument}
+              title="Download PDF"
               className="inline-flex h-8 items-center gap-1.5 rounded-sm bg-primary px-2.5 text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/90"
             >
               <Download className="h-3.5 w-3.5" />
@@ -398,9 +423,8 @@ function DocumentPage() {
               mime={mime}
               previewMime={previewMime}
               conversionError={preview?.previewError}
-              isAdmin={isAdmin}
               currentVersion={currentVersion}
-              onDownload={() => downloadVersion(currentVersion)}
+              onDownload={downloadCurrentDocument}
             />
           ) : isPdf ? (
             <iframe src={preview.url} className="w-full h-full" title={doc.title} />
@@ -420,9 +444,8 @@ function DocumentPage() {
               mime={mime}
               previewMime={previewMime}
               conversionError={preview?.previewError}
-              isAdmin={isAdmin}
               currentVersion={currentVersion}
-              onDownload={() => downloadVersion(currentVersion)}
+              onDownload={downloadCurrentDocument}
             />
           )}
         </div>
@@ -545,7 +568,6 @@ function PreviewUnavailable({
   mime,
   previewMime,
   conversionError,
-  isAdmin,
   currentVersion,
   onDownload,
 }: {
@@ -553,7 +575,6 @@ function PreviewUnavailable({
   mime: string;
   previewMime: string;
   conversionError?: string | null;
-  isAdmin: boolean;
   currentVersion: Version;
   onDownload: () => void;
 }) {
@@ -570,14 +591,12 @@ function PreviewUnavailable({
             : `This file type (${mime || previewMime || "unknown"}) can't be previewed in the browser.`}
         </div>
       </div>
-      {isAdmin && (
-        <button
-          onClick={onDownload}
-          className="inline-flex items-center gap-1.5 rounded-sm bg-primary px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/90"
-        >
-          <Download className="h-3.5 w-3.5" /> Download file
-        </button>
-      )}
+      <button
+        onClick={onDownload}
+        className="inline-flex items-center gap-1.5 rounded-sm bg-primary px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/90"
+      >
+        <Download className="h-3.5 w-3.5" /> Download PDF
+      </button>
       {(conversionError || currentVersion.preview_error) && (
         <div className="max-w-sm text-xs text-muted-foreground">
           {conversionError || currentVersion.preview_error}

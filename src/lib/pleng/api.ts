@@ -32,6 +32,7 @@ export type DocumentRow = {
   published_by: string | null;
   published_at: string | null;
   department_id: string;
+  folder_id?: string | null;
   departments?: { name: string; code: string; color: string | null } | null;
   publisher?: { full_name: string | null; email: string | null } | null;
   uploader?: { full_name: string | null; email: string | null } | null;
@@ -53,6 +54,18 @@ export type Version = {
   preview_error: string | null;
   created_at: string;
 };
+
+export type Folder = {
+  id: string;
+  department_id: string;
+  parent_id: string | null;
+  name: string;
+  created_by: string | null;
+  created_at: string;
+  document_count: number;
+};
+
+export type FolderCrumb = { id: string; name: string };
 
 type ApiErrorBody = { error?: string };
 
@@ -115,12 +128,46 @@ export async function listDepartments() {
   return api<{ departments: Department[] }>("/api/departments");
 }
 
-export async function listDocuments(params: { q?: string; dept?: string; status?: string }) {
+export async function listDocuments(params: {
+  q?: string;
+  dept?: string;
+  status?: string;
+  folder?: string;
+}) {
   const search = new URLSearchParams();
   if (params.q) search.set("q", params.q);
   if (params.dept) search.set("dept", params.dept);
   if (params.status) search.set("status", params.status);
+  if (params.folder) search.set("folder", params.folder);
   return api<{ documents: DocumentRow[] }>(`/api/documents?${search}`);
+}
+
+export async function listFolders(params: { dept: string; parent?: string }) {
+  const search = new URLSearchParams({ dept: params.dept });
+  if (params.parent) search.set("parent", params.parent);
+  return api<{ folders: Folder[]; path: FolderCrumb[] }>(`/api/folders?${search}`);
+}
+
+export async function createFolder(input: {
+  department_id: string;
+  parent_id?: string | null;
+  name: string;
+}) {
+  return api<{ id: string }>("/api/folders", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteFolder(folderId: string) {
+  return api<{ ok: true }>(`/api/folders/${folderId}`, { method: "DELETE" });
+}
+
+export async function moveDocument(docId: string, folderId: string | null) {
+  return api<{ ok: true }>(`/api/documents/${docId}/folder`, {
+    method: "PATCH",
+    body: JSON.stringify({ folder_id: folderId }),
+  });
 }
 
 export async function getDocument(docId: string) {

@@ -13,6 +13,7 @@ export const Route = createFileRoute("/api/documents")({
             q: url.searchParams.get("q") || undefined,
             dept: url.searchParams.get("dept") || undefined,
             status: url.searchParams.get("status") || undefined,
+            folder: url.searchParams.get("folder") || undefined,
           };
           return Response.json({ documents: await listDocuments(user, filters) });
         } catch (error) {

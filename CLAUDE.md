@@ -19,3 +19,6 @@ Folders live inside departments, can nest, hold documents and other folders. Exi
 - Hover shows the papers, a click must navigate into the folder (handle onClick on a wrapper div).
 - items: pass up to 3 blank papers (`{}`) based on the folder's document count. When the count is 0 the folder must show no papers. The component falls back to sample items when items is empty (the `source` line near line 1225). Change that one line so an empty array stays empty, and check it in the browser.
 - Drag and drop of documents onto folders is done with normal HTML5 drag events on a wrapper div around each tile, not with the component's own drag.
+
+## Lint and formatting
+- Do NOT run npm run format, prettier --write, or eslint --fix. Existing files have CRLF line endings and lint fails repo-wide for old reasons. Only check your own files.

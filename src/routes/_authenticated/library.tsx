@@ -15,8 +15,11 @@ import {
   documentDownloadUrl,
   listDepartments,
   listDocuments,
+  listAllFolders,
   listFolders,
   listUsers,
+  moveDocument,
+  renameFolder,
   uploadDocument,
   type Department,
   type DocumentRow as DocRow,
@@ -40,6 +43,8 @@ import {
   MessageCircle,
   Trash2,
   FolderPlus,
+  FolderInput,
+  Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -69,6 +74,8 @@ function LibraryPage() {
   const [view, setView] = useState<"grid" | "list">("grid");
   const [uploadOpen, setUploadOpen] = useState(false);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<FolderRow | null>(null);
+  const [moveTarget, setMoveTarget] = useState<DocRow | null>(null);
   const qc = useQueryClient();
 
   const { data: departments = [] } = useQuery<Department[]>({
@@ -87,6 +94,18 @@ function LibraryPage() {
   });
   const canUpload = canContributeRole(currentRole);
   const canManageDocuments = isAdminRole(currentRole);
+
+  const { data: me } = useQuery({
+    queryKey: ["current-user"],
+    queryFn: async () => {
+      const { user } = await currentUser();
+      return user ? { id: user.id, role: user.role } : null;
+    },
+  });
+  const meIsAdmin = isAdminRole(me?.role);
+  const canEditFolder = (f: FolderRow) => Boolean(me && (meIsAdmin || f.created_by === me.id));
+  const canMove = (d: DocRow) =>
+    Boolean(me && (meIsAdmin || d.owner_id === me.id || d.uploaded_by === me.id));
 
   const { data: users = [], isLoading: usersLoading } = useQuery<LibraryUser[]>({
     queryKey: ["users", "document-viewers"],
@@ -278,14 +297,15 @@ function LibraryPage() {
         ) : (
           <>
             {subfolders.length > 0 && (
-              <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
+              <div className="mb-6 grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
                 {subfolders.map((f) => (
                   <FolderTile
                     key={f.id}
                     folder={f}
                     color={deptColor}
-                    canDelete={canManageDocuments}
+                    canEdit={canEditFolder(f)}
                     onOpen={() => goToFolder(f.id)}
+                    onRename={() => setRenameTarget(f)}
                     onDeleted={onFolderDeleted}
                   />
                 ))}
@@ -298,6 +318,8 @@ function LibraryPage() {
                     key={doc.id}
                     doc={doc}
                     canManageDocuments={canManageDocuments}
+                    canMove={canMove(doc)}
+                    onMove={() => setMoveTarget(doc)}
                     onDeleted={() => {
                       qc.invalidateQueries({ queryKey: ["documents"] });
                       qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
@@ -310,6 +332,8 @@ function LibraryPage() {
               <DocTable
                 docs={documents}
                 canManageDocuments={canManageDocuments}
+                canMove={canMove}
+                onMove={setMoveTarget}
                 onDeleted={() => {
                   qc.invalidateQueries({ queryKey: ["documents"] });
                   qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
@@ -322,13 +346,39 @@ function LibraryPage() {
       </div>
 
       {newFolderOpen && canUpload && currentDept && (
-        <NewFolderModal
+        <FolderNameModal
           departmentId={currentDept.id}
           parentId={inFolder ? folder : undefined}
           onClose={() => setNewFolderOpen(false)}
-          onCreated={() => {
+          onSaved={() => {
             qc.invalidateQueries({ queryKey: ["folders"] });
             setNewFolderOpen(false);
+          }}
+        />
+      )}
+
+      {renameTarget && (
+        <FolderNameModal
+          departmentId={renameTarget.department_id}
+          parentId={renameTarget.parent_id ?? undefined}
+          folder={renameTarget}
+          onClose={() => setRenameTarget(null)}
+          onSaved={() => {
+            qc.invalidateQueries({ queryKey: ["folders"] });
+            setRenameTarget(null);
+          }}
+        />
+      )}
+
+      {moveTarget && (
+        <MoveDocumentModal
+          doc={moveTarget}
+          department={departments.find((d) => d.id === moveTarget.department_id)}
+          onClose={() => setMoveTarget(null)}
+          onMoved={() => {
+            qc.invalidateQueries({ queryKey: ["documents"] });
+            qc.invalidateQueries({ queryKey: ["folders"] });
+            setMoveTarget(null);
           }}
         />
       )}
@@ -435,13 +485,34 @@ function addedBy(doc: DocRow) {
   return doc.uploader?.full_name || doc.uploader?.email || "Unknown user";
 }
 
+function MoveButton({ title, onClick }: { title: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onClick();
+      }}
+      title="Move to..."
+      aria-label={`Move ${title} to another folder`}
+      className="inline-flex h-8 w-8 items-center justify-center rounded-sm border border-input bg-card text-muted-foreground shadow-sm transition-colors hover:border-primary/50 hover:bg-primary hover:text-primary-foreground"
+    >
+      <FolderInput className="h-3.5 w-3.5" />
+    </button>
+  );
+}
+
 function DocCard({
   doc,
   canManageDocuments,
+  canMove,
+  onMove,
   onDeleted,
 }: {
   doc: DocRow;
   canManageDocuments: boolean;
+  canMove: boolean;
+  onMove: () => void;
   onDeleted: () => void;
 }) {
   const color = doc.departments?.color ?? "oklch(0.43 0.13 198)";
@@ -529,6 +600,7 @@ function DocCard({
           >
             <Download className="h-3.5 w-3.5" />
           </button>
+          {canMove && <MoveButton title={doc.title} onClick={onMove} />}
           {canManageDocuments && (
             <>
               <button
@@ -578,10 +650,14 @@ function DocCard({
 function DocTable({
   docs,
   canManageDocuments,
+  canMove,
+  onMove,
   onDeleted,
 }: {
   docs: DocRow[];
   canManageDocuments: boolean;
+  canMove: (doc: DocRow) => boolean;
+  onMove: (doc: DocRow) => void;
   onDeleted: () => void;
 }) {
   return (
@@ -653,6 +729,7 @@ function DocTable({
                   >
                     <Download className="h-3.5 w-3.5" />
                   </button>
+                  {canMove(d) && <MoveButton title={d.title} onClick={() => onMove(d)} />}
                   {canManageDocuments && (
                     <>
                       <button
@@ -748,14 +825,16 @@ function FolderBreadcrumbs({
 function FolderTile({
   folder,
   color,
-  canDelete,
+  canEdit,
   onOpen,
+  onRename,
   onDeleted,
 }: {
   folder: FolderRow;
   color: string;
-  canDelete: boolean;
+  canEdit: boolean;
   onOpen: () => void;
+  onRename: () => void;
   onDeleted: () => void;
 }) {
   const items = Array.from({ length: Math.min(3, folder.document_count) }, () => ({}));
@@ -776,7 +855,7 @@ function FolderTile({
     <div
       role="link"
       tabIndex={0}
-      title={folder.name}
+      aria-label={`Open folder ${folder.name}`}
       onClick={onOpen}
       onKeyDown={(e) => {
         if (e.key === "Enter") {
@@ -784,7 +863,7 @@ function FolderTile({
           onOpen();
         }
       }}
-      className="group relative flex cursor-pointer flex-col items-center rounded-lg p-2 outline-none hover:bg-secondary/60 focus-visible:ring-2 focus-visible:ring-ring"
+      className="group relative flex cursor-pointer flex-col items-center rounded-lg p-2 outline-none hover:z-10 hover:bg-secondary/60 focus-within:z-10 focus-visible:ring-2 focus-visible:ring-ring"
     >
       <Folder
         mode="flap"
@@ -794,11 +873,38 @@ function FolderTile({
         intro={false}
         zoomOnClick={false}
         size={0.8}
-        label={folder.name}
+        layout="stack"
+        tilt={0.2}
+        bounce={0.15}
         color={color}
         items={items}
       />
-      {canDelete && folder.document_count === 0 && (
+      <div className="mt-1 flex w-full min-w-0 flex-wrap items-baseline justify-center gap-x-2 gap-y-0.5 text-center">
+        <span
+          className="line-clamp-2 min-w-0 break-words text-2xl font-semibold leading-tight text-foreground"
+          title={folder.name}
+        >
+          {folder.name}
+        </span>
+        <span className="shrink-0 font-mono text-sm text-muted-foreground">
+          {folder.document_count} {folder.document_count === 1 ? "doc" : "docs"}
+        </span>
+      </div>
+      {canEdit && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRename();
+          }}
+          title="Rename folder"
+          aria-label={`Rename folder ${folder.name}`}
+          className="absolute left-1 top-1 inline-flex h-7 w-7 items-center justify-center rounded-sm border border-input bg-card text-muted-foreground opacity-0 shadow-sm transition-opacity hover:bg-secondary hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
+      )}
+      {canEdit && folder.document_count === 0 && (
         <button
           type="button"
           onClick={remove}
@@ -813,18 +919,20 @@ function FolderTile({
   );
 }
 
-function NewFolderModal({
+function FolderNameModal({
   departmentId,
   parentId,
+  folder,
   onClose,
-  onCreated,
+  onSaved,
 }: {
   departmentId: string;
   parentId: string | undefined;
+  folder?: FolderRow;
   onClose: () => void;
-  onCreated: () => void;
+  onSaved: () => void;
 }) {
-  const [name, setName] = useState("");
+  const [name, setName] = useState(folder?.name ?? "");
   const [saving, setSaving] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
@@ -833,11 +941,17 @@ function NewFolderModal({
     if (!trimmed) return;
     setSaving(true);
     try {
-      await createFolder({ department_id: departmentId, parent_id: parentId, name: trimmed });
-      toast.success("Folder created");
-      onCreated();
+      if (folder) {
+        await renameFolder(folder.id, trimmed);
+        toast.success("Folder renamed");
+      } else {
+        await createFolder({ department_id: departmentId, parent_id: parentId, name: trimmed });
+        toast.success("Folder created");
+      }
+      onSaved();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not create folder");
+      const fallback = folder ? "Could not rename folder" : "Could not create folder";
+      toast.error(err instanceof Error ? err.message : fallback);
     } finally {
       setSaving(false);
     }
@@ -848,8 +962,10 @@ function NewFolderModal({
       <div className="form-panel w-full max-w-md overflow-hidden animate-reveal">
         <div className="form-panel-header flex items-center justify-between px-5 py-4">
           <div>
-            <div className="text-xs font-bold uppercase text-primary">New entry</div>
-            <h2 className="text-lg font-bold">New folder</h2>
+            <div className="text-xs font-bold uppercase text-primary">
+              {folder ? "Edit entry" : "New entry"}
+            </div>
+            <h2 className="text-lg font-bold">{folder ? "Rename folder" : "New folder"}</h2>
           </div>
           <button
             onClick={onClose}
@@ -874,7 +990,119 @@ function NewFolderModal({
               className="action-primary h-10 px-4"
             >
               {saving && <Loader2 className="h-3 w-3 animate-spin" />}
-              Create
+              {folder ? "Save" : "Create"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function MoveDocumentModal({
+  doc,
+  department,
+  onClose,
+  onMoved,
+}: {
+  doc: DocRow;
+  department: Department | undefined;
+  onClose: () => void;
+  onMoved: () => void;
+}) {
+  const current = doc.folder_id ?? null;
+  const [target, setTarget] = useState<string | null>(current);
+  const [saving, setSaving] = useState(false);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["folders", { all: department?.slug }],
+    enabled: Boolean(department),
+    queryFn: () => listAllFolders(department!.slug),
+  });
+  const options = [
+    { id: null as string | null, path: department?.name ?? "Department root" },
+    ...(data?.folders ?? []),
+  ];
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (target === current) return;
+    setSaving(true);
+    try {
+      await moveDocument(doc.id, target);
+      toast.success("Document moved");
+      onMoved();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not move document");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 p-4 backdrop-blur-sm">
+      <div className="form-panel w-full max-w-md overflow-hidden animate-reveal">
+        <div className="form-panel-header flex items-center justify-between px-5 py-4">
+          <div className="min-w-0">
+            <div className="text-xs font-bold uppercase text-primary">Move to...</div>
+            <h2 className="truncate text-lg font-bold">{doc.title}</h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground text-lg leading-none"
+          >
+            ×
+          </button>
+        </div>
+        <form onSubmit={onSubmit} className="space-y-5 p-5">
+          {isLoading ? (
+            <div className="flex items-center text-sm text-muted-foreground">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading folders…
+            </div>
+          ) : (
+            <div className="max-h-72 space-y-1 overflow-y-auto">
+              {options.map((o) => {
+                const isCurrent = o.id === current;
+                return (
+                  <label
+                    key={o.id ?? "root"}
+                    className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm ${isCurrent ? "text-muted-foreground" : "cursor-pointer hover:bg-secondary"}`}
+                  >
+                    <input
+                      type="radio"
+                      name="move-target"
+                      checked={target === o.id}
+                      disabled={isCurrent}
+                      onChange={() => setTarget(o.id)}
+                    />
+                    <span className="truncate" title={o.path}>
+                      {o.path}
+                    </span>
+                    {isCurrent && (
+                      <span className="ml-auto shrink-0 text-[10px] font-mono uppercase">
+                        Current
+                      </span>
+                    )}
+                  </label>
+                );
+              })}
+            </div>
+          )}
+          <div className="flex justify-end gap-2 border-t border-border pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md px-3 py-2 text-xs font-bold uppercase text-muted-foreground hover:bg-secondary hover:text-foreground"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving || target === current}
+              className="action-primary h-10 px-4"
+            >
+              {saving && <Loader2 className="h-3 w-3 animate-spin" />}
+              Move
             </button>
           </div>
         </form>

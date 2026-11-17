@@ -9,6 +9,11 @@ import { ApiError } from "./http.server";
 const listSchema = z.object({
   dept: z.string().min(1),
   parent: z.string().uuid().optional(),
+  all: z.literal("1").optional(),
+});
+
+const renameSchema = z.object({
+  name: z.string().trim().min(1).max(120),
 });
 
 const createSchema = z.object({
@@ -42,12 +47,33 @@ async function folderInDepartment(folderId: string, departmentId: string) {
 }
 
 export async function listFolders(user: AuthUser, input: unknown) {
-  const { dept, parent } = listSchema.parse(input);
-  const deptResult = await query<{ id: string }>("SELECT id FROM departments WHERE slug = $1", [
-    dept,
-  ]);
+  const { dept, parent, all } = listSchema.parse(input);
+  const deptResult = await query<{ id: string; name: string }>(
+    "SELECT id, name FROM departments WHERE slug = $1",
+    [dept],
+  );
   const departmentId = deptResult.rows[0]?.id;
   if (!departmentId) throw new ApiError(404, "Department not found");
+
+  if (all) {
+    const { rows } = await query<{ id: string; path: string }>(
+      `
+        WITH RECURSIVE tree AS (
+          SELECT id, ($2::text || ' / ' || name) AS path, 0 AS depth
+          FROM folders
+          WHERE department_id = $1 AND parent_id IS NULL
+          UNION ALL
+          SELECT f.id, t.path || ' / ' || f.name, t.depth + 1
+          FROM folders f
+          JOIN tree t ON f.parent_id = t.id
+          WHERE t.depth < 50
+        )
+        SELECT id, path FROM tree ORDER BY lower(path)
+      `,
+      [departmentId, deptResult.rows[0].name],
+    );
+    return { folders: rows };
+  }
 
   let path: Array<{ id: string; name: string }> = [];
   if (parent) {
@@ -161,6 +187,35 @@ export async function deleteFolder(user: AuthUser, folderId: string) {
   await query(
     "INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES ($1, 'folder.deleted', 'folder', $2)",
     [user.id, id],
+  );
+  return { ok: true };
+}
+
+export async function renameFolder(user: AuthUser, folderId: string, input: unknown) {
+  const id = idSchema.parse(folderId);
+  const { name } = renameSchema.parse(input);
+  const { rows } = await query<{ name: string; created_by: string | null }>(
+    "SELECT name, created_by FROM folders WHERE id = $1",
+    [id],
+  );
+  const folder = rows[0];
+  if (!folder) throw new ApiError(404, "Folder not found");
+  if (!isAdmin(user) && folder.created_by !== user.id) {
+    throw new ApiError(403, "You cannot rename this folder");
+  }
+
+  try {
+    await query("UPDATE folders SET name = $1 WHERE id = $2", [name, id]);
+  } catch (error) {
+    if ((error as { code?: string }).code === "23505") {
+      throw new ApiError(409, "A folder with that name already exists here");
+    }
+    throw error;
+  }
+
+  await query(
+    "INSERT INTO audit_logs (user_id, action, entity_type, entity_id, metadata) VALUES ($1, 'folder.renamed', 'folder', $2, $3)",
+    [user.id, id, JSON.stringify({ from: folder.name, to: name })],
   );
   return { ok: true };
 }

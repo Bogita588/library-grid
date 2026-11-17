@@ -159,6 +159,18 @@ export async function createFolder(input: {
   });
 }
 
+export async function listAllFolders(dept: string) {
+  const search = new URLSearchParams({ dept, all: "1" });
+  return api<{ folders: Array<{ id: string; path: string }> }>(`/api/folders?${search}`);
+}
+
+export async function renameFolder(folderId: string, name: string) {
+  return api<{ ok: true }>(`/api/folders/${folderId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ name }),
+  });
+}
+
 export async function deleteFolder(folderId: string) {
   return api<{ ok: true }>(`/api/folders/${folderId}`, { method: "DELETE" });
 }

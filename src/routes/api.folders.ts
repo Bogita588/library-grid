@@ -13,6 +13,7 @@ export const Route = createFileRoute("/api/folders")({
             await listFolders(user, {
               dept: url.searchParams.get("dept") || undefined,
               parent: url.searchParams.get("parent") || undefined,
+              all: url.searchParams.get("all") || undefined,
             }),
           );
         } catch (error) {

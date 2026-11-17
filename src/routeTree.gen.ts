@@ -20,6 +20,7 @@ import { Route as ApiDashboardRouteImport } from './routes/api.dashboard'
 import { Route as ApiDepartmentsRouteImport } from './routes/api.departments'
 import { Route as ApiDocumentsRouteImport } from './routes/api.documents'
 import { Route as ApiFavoritesRouteImport } from './routes/api.favorites'
+import { Route as ApiFoldersRouteImport } from './routes/api.folders'
 import { Route as ApiHealthRouteImport } from './routes/api.health'
 import { Route as ApiMeRouteImport } from './routes/api.me'
 import { Route as ApiUsersRouteImport } from './routes/api.users'
@@ -29,8 +30,10 @@ import { Route as ApiAuthLogoutRouteImport } from './routes/api.auth.logout'
 import { Route as ApiAuthRegisterRouteImport } from './routes/api.auth.register'
 import { Route as ApiDocumentsDocIdRouteImport } from './routes/api.documents.$docId'
 import { Route as ApiFavoritesDocIdRouteImport } from './routes/api.favorites.$docId'
+import { Route as ApiFoldersFolderIdRouteImport } from './routes/api.folders.$folderId'
 import { Route as ApiDocumentVersionsVersionIdDownloadUrlRouteImport } from './routes/api.document-versions.$versionId.download-url'
 import { Route as ApiDocumentsDocIdDownloadUrlRouteImport } from './routes/api.documents.$docId.download-url'
+import { Route as ApiDocumentsDocIdFolderRouteImport } from './routes/api.documents.$docId.folder'
 import { Route as ApiDocumentsDocIdPreviewRouteImport } from './routes/api.documents.$docId.preview'
 import { Route as ApiDocumentsDocIdVersionsRouteImport } from './routes/api.documents.$docId.versions'
 import { Route as ApiDocumentsDocIdViewUrlRouteImport } from './routes/api.documents.$docId.view-url'
@@ -90,6 +93,11 @@ const ApiFavoritesRoute = ApiFavoritesRouteImport.update({
   path: '/api/favorites',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiFoldersRoute = ApiFoldersRouteImport.update({
+  id: '/api/folders',
+  path: '/api/folders',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiHealthRoute = ApiHealthRouteImport.update({
   id: '/api/health',
   path: '/api/health',
@@ -136,6 +144,11 @@ const ApiFavoritesDocIdRoute = ApiFavoritesDocIdRouteImport.update({
   path: '/$docId',
   getParentRoute: () => ApiFavoritesRoute,
 } as any)
+const ApiFoldersFolderIdRoute = ApiFoldersFolderIdRouteImport.update({
+  id: '/$folderId',
+  path: '/$folderId',
+  getParentRoute: () => ApiFoldersRoute,
+} as any)
 const ApiDocumentVersionsVersionIdDownloadUrlRoute =
   ApiDocumentVersionsVersionIdDownloadUrlRouteImport.update({
     id: '/api/document-versions/$versionId/download-url',
@@ -148,6 +161,11 @@ const ApiDocumentsDocIdDownloadUrlRoute =
     path: '/download-url',
     getParentRoute: () => ApiDocumentsDocIdRoute,
   } as any)
+const ApiDocumentsDocIdFolderRoute = ApiDocumentsDocIdFolderRouteImport.update({
+  id: '/folder',
+  path: '/folder',
+  getParentRoute: () => ApiDocumentsDocIdRoute,
+} as any)
 const ApiDocumentsDocIdPreviewRoute =
   ApiDocumentsDocIdPreviewRouteImport.update({
     id: '/preview',
@@ -183,6 +201,7 @@ export interface FileRoutesByFullPath {
   '/api/departments': typeof ApiDepartmentsRoute
   '/api/documents': typeof ApiDocumentsRouteWithChildren
   '/api/favorites': typeof ApiFavoritesRouteWithChildren
+  '/api/folders': typeof ApiFoldersRouteWithChildren
   '/api/health': typeof ApiHealthRoute
   '/api/me': typeof ApiMeRoute
   '/api/users': typeof ApiUsersRouteWithChildren
@@ -192,8 +211,10 @@ export interface FileRoutesByFullPath {
   '/api/auth/register': typeof ApiAuthRegisterRoute
   '/api/documents/$docId': typeof ApiDocumentsDocIdRouteWithChildren
   '/api/favorites/$docId': typeof ApiFavoritesDocIdRoute
+  '/api/folders/$folderId': typeof ApiFoldersFolderIdRoute
   '/api/document-versions/$versionId/download-url': typeof ApiDocumentVersionsVersionIdDownloadUrlRoute
   '/api/documents/$docId/download-url': typeof ApiDocumentsDocIdDownloadUrlRoute
+  '/api/documents/$docId/folder': typeof ApiDocumentsDocIdFolderRoute
   '/api/documents/$docId/preview': typeof ApiDocumentsDocIdPreviewRoute
   '/api/documents/$docId/versions': typeof ApiDocumentsDocIdVersionsRoute
   '/api/documents/$docId/view-url': typeof ApiDocumentsDocIdViewUrlRoute
@@ -210,6 +231,7 @@ export interface FileRoutesByTo {
   '/api/departments': typeof ApiDepartmentsRoute
   '/api/documents': typeof ApiDocumentsRouteWithChildren
   '/api/favorites': typeof ApiFavoritesRouteWithChildren
+  '/api/folders': typeof ApiFoldersRouteWithChildren
   '/api/health': typeof ApiHealthRoute
   '/api/me': typeof ApiMeRoute
   '/api/users': typeof ApiUsersRouteWithChildren
@@ -219,8 +241,10 @@ export interface FileRoutesByTo {
   '/api/auth/register': typeof ApiAuthRegisterRoute
   '/api/documents/$docId': typeof ApiDocumentsDocIdRouteWithChildren
   '/api/favorites/$docId': typeof ApiFavoritesDocIdRoute
+  '/api/folders/$folderId': typeof ApiFoldersFolderIdRoute
   '/api/document-versions/$versionId/download-url': typeof ApiDocumentVersionsVersionIdDownloadUrlRoute
   '/api/documents/$docId/download-url': typeof ApiDocumentsDocIdDownloadUrlRoute
+  '/api/documents/$docId/folder': typeof ApiDocumentsDocIdFolderRoute
   '/api/documents/$docId/preview': typeof ApiDocumentsDocIdPreviewRoute
   '/api/documents/$docId/versions': typeof ApiDocumentsDocIdVersionsRoute
   '/api/documents/$docId/view-url': typeof ApiDocumentsDocIdViewUrlRoute
@@ -239,6 +263,7 @@ export interface FileRoutesById {
   '/api/departments': typeof ApiDepartmentsRoute
   '/api/documents': typeof ApiDocumentsRouteWithChildren
   '/api/favorites': typeof ApiFavoritesRouteWithChildren
+  '/api/folders': typeof ApiFoldersRouteWithChildren
   '/api/health': typeof ApiHealthRoute
   '/api/me': typeof ApiMeRoute
   '/api/users': typeof ApiUsersRouteWithChildren
@@ -248,8 +273,10 @@ export interface FileRoutesById {
   '/api/auth/register': typeof ApiAuthRegisterRoute
   '/api/documents/$docId': typeof ApiDocumentsDocIdRouteWithChildren
   '/api/favorites/$docId': typeof ApiFavoritesDocIdRoute
+  '/api/folders/$folderId': typeof ApiFoldersFolderIdRoute
   '/api/document-versions/$versionId/download-url': typeof ApiDocumentVersionsVersionIdDownloadUrlRoute
   '/api/documents/$docId/download-url': typeof ApiDocumentsDocIdDownloadUrlRoute
+  '/api/documents/$docId/folder': typeof ApiDocumentsDocIdFolderRoute
   '/api/documents/$docId/preview': typeof ApiDocumentsDocIdPreviewRoute
   '/api/documents/$docId/versions': typeof ApiDocumentsDocIdVersionsRoute
   '/api/documents/$docId/view-url': typeof ApiDocumentsDocIdViewUrlRoute
@@ -268,6 +295,7 @@ export interface FileRouteTypes {
     | '/api/departments'
     | '/api/documents'
     | '/api/favorites'
+    | '/api/folders'
     | '/api/health'
     | '/api/me'
     | '/api/users'
@@ -277,8 +305,10 @@ export interface FileRouteTypes {
     | '/api/auth/register'
     | '/api/documents/$docId'
     | '/api/favorites/$docId'
+    | '/api/folders/$folderId'
     | '/api/document-versions/$versionId/download-url'
     | '/api/documents/$docId/download-url'
+    | '/api/documents/$docId/folder'
     | '/api/documents/$docId/preview'
     | '/api/documents/$docId/versions'
     | '/api/documents/$docId/view-url'
@@ -295,6 +325,7 @@ export interface FileRouteTypes {
     | '/api/departments'
     | '/api/documents'
     | '/api/favorites'
+    | '/api/folders'
     | '/api/health'
     | '/api/me'
     | '/api/users'
@@ -304,8 +335,10 @@ export interface FileRouteTypes {
     | '/api/auth/register'
     | '/api/documents/$docId'
     | '/api/favorites/$docId'
+    | '/api/folders/$folderId'
     | '/api/document-versions/$versionId/download-url'
     | '/api/documents/$docId/download-url'
+    | '/api/documents/$docId/folder'
     | '/api/documents/$docId/preview'
     | '/api/documents/$docId/versions'
     | '/api/documents/$docId/view-url'
@@ -323,6 +356,7 @@ export interface FileRouteTypes {
     | '/api/departments'
     | '/api/documents'
     | '/api/favorites'
+    | '/api/folders'
     | '/api/health'
     | '/api/me'
     | '/api/users'
@@ -332,8 +366,10 @@ export interface FileRouteTypes {
     | '/api/auth/register'
     | '/api/documents/$docId'
     | '/api/favorites/$docId'
+    | '/api/folders/$folderId'
     | '/api/document-versions/$versionId/download-url'
     | '/api/documents/$docId/download-url'
+    | '/api/documents/$docId/folder'
     | '/api/documents/$docId/preview'
     | '/api/documents/$docId/versions'
     | '/api/documents/$docId/view-url'
@@ -348,6 +384,7 @@ export interface RootRouteChildren {
   ApiDepartmentsRoute: typeof ApiDepartmentsRoute
   ApiDocumentsRoute: typeof ApiDocumentsRouteWithChildren
   ApiFavoritesRoute: typeof ApiFavoritesRouteWithChildren
+  ApiFoldersRoute: typeof ApiFoldersRouteWithChildren
   ApiHealthRoute: typeof ApiHealthRoute
   ApiMeRoute: typeof ApiMeRoute
   ApiUsersRoute: typeof ApiUsersRouteWithChildren
@@ -436,6 +473,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiFavoritesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/folders': {
+      id: '/api/folders'
+      path: '/api/folders'
+      fullPath: '/api/folders'
+      preLoaderRoute: typeof ApiFoldersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/health': {
       id: '/api/health'
       path: '/api/health'
@@ -499,6 +543,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiFavoritesDocIdRouteImport
       parentRoute: typeof ApiFavoritesRoute
     }
+    '/api/folders/$folderId': {
+      id: '/api/folders/$folderId'
+      path: '/$folderId'
+      fullPath: '/api/folders/$folderId'
+      preLoaderRoute: typeof ApiFoldersFolderIdRouteImport
+      parentRoute: typeof ApiFoldersRoute
+    }
     '/api/document-versions/$versionId/download-url': {
       id: '/api/document-versions/$versionId/download-url'
       path: '/api/document-versions/$versionId/download-url'
@@ -511,6 +562,13 @@ declare module '@tanstack/react-router' {
       path: '/download-url'
       fullPath: '/api/documents/$docId/download-url'
       preLoaderRoute: typeof ApiDocumentsDocIdDownloadUrlRouteImport
+      parentRoute: typeof ApiDocumentsDocIdRoute
+    }
+    '/api/documents/$docId/folder': {
+      id: '/api/documents/$docId/folder'
+      path: '/folder'
+      fullPath: '/api/documents/$docId/folder'
+      preLoaderRoute: typeof ApiDocumentsDocIdFolderRouteImport
       parentRoute: typeof ApiDocumentsDocIdRoute
     }
     '/api/documents/$docId/preview': {
@@ -574,6 +632,7 @@ const AuthenticatedRouteRouteWithChildren =
 
 interface ApiDocumentsDocIdRouteChildren {
   ApiDocumentsDocIdDownloadUrlRoute: typeof ApiDocumentsDocIdDownloadUrlRoute
+  ApiDocumentsDocIdFolderRoute: typeof ApiDocumentsDocIdFolderRoute
   ApiDocumentsDocIdPreviewRoute: typeof ApiDocumentsDocIdPreviewRoute
   ApiDocumentsDocIdVersionsRoute: typeof ApiDocumentsDocIdVersionsRoute
   ApiDocumentsDocIdViewUrlRoute: typeof ApiDocumentsDocIdViewUrlRoute
@@ -581,6 +640,7 @@ interface ApiDocumentsDocIdRouteChildren {
 
 const ApiDocumentsDocIdRouteChildren: ApiDocumentsDocIdRouteChildren = {
   ApiDocumentsDocIdDownloadUrlRoute: ApiDocumentsDocIdDownloadUrlRoute,
+  ApiDocumentsDocIdFolderRoute: ApiDocumentsDocIdFolderRoute,
   ApiDocumentsDocIdPreviewRoute: ApiDocumentsDocIdPreviewRoute,
   ApiDocumentsDocIdVersionsRoute: ApiDocumentsDocIdVersionsRoute,
   ApiDocumentsDocIdViewUrlRoute: ApiDocumentsDocIdViewUrlRoute,
@@ -613,6 +673,18 @@ const ApiFavoritesRouteWithChildren = ApiFavoritesRoute._addFileChildren(
   ApiFavoritesRouteChildren,
 )
 
+interface ApiFoldersRouteChildren {
+  ApiFoldersFolderIdRoute: typeof ApiFoldersFolderIdRoute
+}
+
+const ApiFoldersRouteChildren: ApiFoldersRouteChildren = {
+  ApiFoldersFolderIdRoute: ApiFoldersFolderIdRoute,
+}
+
+const ApiFoldersRouteWithChildren = ApiFoldersRoute._addFileChildren(
+  ApiFoldersRouteChildren,
+)
+
 interface ApiUsersRouteChildren {
   ApiUsersUserIdRoleRoute: typeof ApiUsersUserIdRoleRoute
 }
@@ -633,6 +705,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiDepartmentsRoute: ApiDepartmentsRoute,
   ApiDocumentsRoute: ApiDocumentsRouteWithChildren,
   ApiFavoritesRoute: ApiFavoritesRouteWithChildren,
+  ApiFoldersRoute: ApiFoldersRouteWithChildren,
   ApiHealthRoute: ApiHealthRoute,
   ApiMeRoute: ApiMeRoute,
   ApiUsersRoute: ApiUsersRouteWithChildren,

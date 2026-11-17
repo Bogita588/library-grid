@@ -8,16 +8,22 @@ import {
   getDocumentStatusLabel,
 } from "@/lib/document-status";
 import {
+  createFolder,
   currentUser,
   deleteDocument,
+  deleteFolder,
   documentDownloadUrl,
   listDepartments,
   listDocuments,
+  listFolders,
   listUsers,
   uploadDocument,
   type Department,
   type DocumentRow as DocRow,
+  type Folder as FolderRow,
+  type FolderCrumb,
 } from "@/lib/pleng/api";
+import Folder from "@/components/Folder";
 import { canContributeRole, isAdminRole, type AppRole } from "@/lib/roles";
 import {
   Search,
@@ -33,6 +39,7 @@ import {
   Mail,
   MessageCircle,
   Trash2,
+  FolderPlus,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -47,6 +54,7 @@ const searchSchema = z.object({
   q: z.string().optional(),
   dept: z.string().optional(),
   status: statusSearchSchema,
+  folder: z.string().uuid().optional().catch(undefined),
 });
 
 export const Route = createFileRoute("/_authenticated/library")({
@@ -56,9 +64,11 @@ export const Route = createFileRoute("/_authenticated/library")({
 });
 
 function LibraryPage() {
-  const { q, dept, status } = Route.useSearch();
+  const { q, dept, status, folder } = Route.useSearch();
+  const navigate = Route.useNavigate();
   const [view, setView] = useState<"grid" | "list">("grid");
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [newFolderOpen, setNewFolderOpen] = useState(false);
   const qc = useQueryClient();
 
   const { data: departments = [] } = useQuery<Department[]>({
@@ -85,15 +95,39 @@ function LibraryPage() {
   });
 
   const { data: documents = [], isLoading } = useQuery<DocRow[]>({
-    queryKey: ["documents", { q, dept, status }],
+    queryKey: ["documents", { q, dept, status, folder }],
     queryFn: async () => {
-      const { documents } = await listDocuments({ q: q?.trim() || undefined, dept, status });
+      const { documents } = await listDocuments({
+        q: q?.trim() || undefined,
+        dept,
+        status,
+        folder: dept ? folder : undefined,
+      });
       return documents;
     },
   });
 
+  const { data: folderData } = useQuery({
+    queryKey: ["folders", dept, folder],
+    enabled: Boolean(dept),
+    queryFn: () => listFolders({ dept: dept!, parent: folder }),
+  });
+  const searching = Boolean(q?.trim());
+  const subfolders = dept && !searching ? (folderData?.folders ?? []) : [];
+  const folderPath = folderData?.path ?? [];
+
   const currentDept = departments.find((d) => d.slug === dept);
+  const deptColor = currentDept?.color ?? "oklch(0.43 0.13 198)";
   const hasFilters = Boolean(q?.trim() || dept || status);
+  const inFolder = Boolean(dept && folder);
+
+  function goToFolder(id: string | undefined) {
+    navigate({
+      search: (p: typeof Route.types.searchSchemaInput) => ({ ...p, folder: id }),
+    });
+  }
+
+  const onFolderDeleted = () => qc.invalidateQueries({ queryKey: ["folders"] });
   const publishedCount = documents.filter((d) => d.status === "published").length;
   const restrictedCount = documents.filter((d) => d.confidentiality !== "public").length;
   const visibleDeptCount =
@@ -117,7 +151,15 @@ function LibraryPage() {
             </div>
             <div className="mt-2 flex min-w-0 items-center gap-3">
               <h1 className="truncate text-2xl font-bold text-foreground sm:text-3xl">
-                {currentDept ? currentDept.name : "All documents"}
+                {currentDept ? (
+                  <FolderBreadcrumbs
+                    deptName={currentDept.name}
+                    path={inFolder ? folderPath : []}
+                    onNavigate={goToFolder}
+                  />
+                ) : (
+                  "All documents"
+                )}
               </h1>
               <div className="shrink-0 rounded-md border border-border bg-secondary px-2 py-1 text-[10px] font-mono uppercase text-muted-foreground">
                 {documents.length} docs
@@ -156,6 +198,15 @@ function LibraryPage() {
                 className="inline-flex h-11 items-center justify-center gap-1.5 rounded-md bg-accent px-4 text-xs font-bold uppercase text-accent-foreground shadow-lg shadow-black/10 hover:bg-accent/92"
               >
                 <Upload className="h-3.5 w-3.5" /> Upload
+              </button>
+            )}
+
+            {canUpload && currentDept && (
+              <button
+                onClick={() => setNewFolderOpen(true)}
+                className="inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-md border border-input bg-card px-4 text-xs font-bold uppercase text-foreground shadow-sm hover:bg-secondary"
+              >
+                <FolderPlus className="h-3.5 w-3.5" /> New folder
               </button>
             )}
           </div>
@@ -217,18 +268,47 @@ function LibraryPage() {
           <div className="flex items-center justify-center py-24 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading library…
           </div>
-        ) : documents.length === 0 ? (
+        ) : documents.length === 0 && subfolders.length === 0 ? (
           <EmptyState
             canUpload={canUpload}
-            hasFilters={hasFilters}
+            hasFilters={hasFilters && !inFolder}
+            inFolder={inFolder}
             onUpload={() => setUploadOpen(true)}
           />
-        ) : view === "grid" ? (
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-            {documents.map((doc) => (
-              <DocCard
-                key={doc.id}
-                doc={doc}
+        ) : (
+          <>
+            {subfolders.length > 0 && (
+              <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
+                {subfolders.map((f) => (
+                  <FolderTile
+                    key={f.id}
+                    folder={f}
+                    color={deptColor}
+                    canDelete={canManageDocuments}
+                    onOpen={() => goToFolder(f.id)}
+                    onDeleted={onFolderDeleted}
+                  />
+                ))}
+              </div>
+            )}
+            {documents.length === 0 ? null : view === "grid" ? (
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+                {documents.map((doc) => (
+                  <DocCard
+                    key={doc.id}
+                    doc={doc}
+                    canManageDocuments={canManageDocuments}
+                    onDeleted={() => {
+                      qc.invalidateQueries({ queryKey: ["documents"] });
+                      qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
+                      qc.invalidateQueries({ queryKey: ["favorites"] });
+                    }}
+                  />
+                ))}
+              </div>
+            ) : (
+              <DocTable
+                docs={documents}
                 canManageDocuments={canManageDocuments}
                 onDeleted={() => {
                   qc.invalidateQueries({ queryKey: ["documents"] });
@@ -236,20 +316,22 @@ function LibraryPage() {
                   qc.invalidateQueries({ queryKey: ["favorites"] });
                 }}
               />
-            ))}
-          </div>
-        ) : (
-          <DocTable
-            docs={documents}
-            canManageDocuments={canManageDocuments}
-            onDeleted={() => {
-              qc.invalidateQueries({ queryKey: ["documents"] });
-              qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
-              qc.invalidateQueries({ queryKey: ["favorites"] });
-            }}
-          />
+            )}
+          </>
         )}
       </div>
+
+      {newFolderOpen && canUpload && currentDept && (
+        <NewFolderModal
+          departmentId={currentDept.id}
+          parentId={inFolder ? folder : undefined}
+          onClose={() => setNewFolderOpen(false)}
+          onCreated={() => {
+            qc.invalidateQueries({ queryKey: ["folders"] });
+            setNewFolderOpen(false);
+          }}
+        />
+      )}
 
       {uploadOpen && canUpload && (
         <UploadModal
@@ -628,13 +710,188 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+function FolderBreadcrumbs({
+  deptName,
+  path,
+  onNavigate,
+}: {
+  deptName: string;
+  path: FolderCrumb[];
+  onNavigate: (folderId: string | undefined) => void;
+}) {
+  const crumbs = [{ id: undefined as string | undefined, name: deptName }, ...path];
+  return (
+    <nav aria-label="Folder path" className="flex min-w-0 items-center gap-2 truncate">
+      {crumbs.map((c, i) => {
+        const last = i === crumbs.length - 1;
+        return (
+          <span key={c.id ?? "root"} className="flex min-w-0 items-center gap-2">
+            {i > 0 && <span className="text-muted-foreground">/</span>}
+            {last ? (
+              <span className="truncate">{c.name}</span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onNavigate(c.id)}
+                className="truncate text-muted-foreground hover:text-primary"
+              >
+                {c.name}
+              </button>
+            )}
+          </span>
+        );
+      })}
+    </nav>
+  );
+}
+
+function FolderTile({
+  folder,
+  color,
+  canDelete,
+  onOpen,
+  onDeleted,
+}: {
+  folder: FolderRow;
+  color: string;
+  canDelete: boolean;
+  onOpen: () => void;
+  onDeleted: () => void;
+}) {
+  const items = Array.from({ length: Math.min(3, folder.document_count) }, () => ({}));
+
+  async function remove(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!confirm(`Delete folder "${folder.name}"?`)) return;
+    try {
+      await deleteFolder(folder.id);
+      toast.success("Folder deleted");
+      onDeleted();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Delete failed");
+    }
+  }
+
+  return (
+    <div
+      role="link"
+      tabIndex={0}
+      title={folder.name}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+      className="group relative flex cursor-pointer flex-col items-center rounded-lg p-2 outline-none hover:bg-secondary/60 focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <Folder
+        mode="flap"
+        variant="solid"
+        openOn="hover"
+        draggable={false}
+        intro={false}
+        zoomOnClick={false}
+        size={0.8}
+        label={folder.name}
+        color={color}
+        items={items}
+      />
+      {canDelete && folder.document_count === 0 && (
+        <button
+          type="button"
+          onClick={remove}
+          title="Delete folder"
+          aria-label={`Delete folder ${folder.name}`}
+          className="absolute right-1 top-1 inline-flex h-7 w-7 items-center justify-center rounded-sm border border-input bg-card text-destructive opacity-0 shadow-sm transition-opacity hover:bg-destructive/10 group-hover:opacity-100 focus-visible:opacity-100"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function NewFolderModal({
+  departmentId,
+  parentId,
+  onClose,
+  onCreated,
+}: {
+  departmentId: string;
+  parentId: string | undefined;
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setSaving(true);
+    try {
+      await createFolder({ department_id: departmentId, parent_id: parentId, name: trimmed });
+      toast.success("Folder created");
+      onCreated();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not create folder");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 p-4 backdrop-blur-sm">
+      <div className="form-panel w-full max-w-md overflow-hidden animate-reveal">
+        <div className="form-panel-header flex items-center justify-between px-5 py-4">
+          <div>
+            <div className="text-xs font-bold uppercase text-primary">New entry</div>
+            <h2 className="text-lg font-bold">New folder</h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground text-lg leading-none"
+          >
+            ×
+          </button>
+        </div>
+        <form onSubmit={onSubmit} className="space-y-5 p-5">
+          <Input label="Name" value={name} onChange={setName} required />
+          <div className="flex justify-end gap-2 border-t border-border pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md px-3 py-2 text-xs font-bold uppercase text-muted-foreground hover:bg-secondary hover:text-foreground"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving || !name.trim()}
+              className="action-primary h-10 px-4"
+            >
+              {saving && <Loader2 className="h-3 w-3 animate-spin" />}
+              Create
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function EmptyState({
   canUpload,
   hasFilters,
+  inFolder = false,
   onUpload,
 }: {
   canUpload: boolean;
   hasFilters: boolean;
+  inFolder?: boolean;
   onUpload: () => void;
 }) {
   return (
@@ -646,7 +903,7 @@ function EmptyState({
         {hasFilters ? "No matches" : "Empty shelf"}
       </div>
       <h3 className="mt-1 text-lg font-bold">
-        {hasFilters ? "No documents found" : "No documents yet"}
+        {hasFilters ? "No documents found" : inFolder ? "This folder is empty" : "No documents yet"}
       </h3>
       <p className="mt-1 text-sm text-muted-foreground max-w-sm">
         {hasFilters

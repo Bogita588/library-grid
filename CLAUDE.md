@@ -22,3 +22,6 @@ Folders live inside departments, can nest, hold documents and other folders. Exi
 
 ## Lint and formatting
 - Do NOT run npm run format, prettier --write, or eslint --fix. Existing files have CRLF line endings and lint fails repo-wide for old reasons. Only check your own files.
+
+## Type checking
+- npm run build:frontend does NOT type-check. After every change also run `npx tsc --noEmit` and report errors in the files you touched (older errors elsewhere may exist, mention them but do not fix them).

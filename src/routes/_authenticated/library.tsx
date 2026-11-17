@@ -147,6 +147,19 @@ function LibraryPage() {
   }
 
   const onFolderDeleted = () => qc.invalidateQueries({ queryKey: ["folders"] });
+  async function dropDoc(docId: string, folderId: string | null) {
+    const doc = documents.find((d) => d.id === docId);
+    if (doc && (doc.folder_id ?? null) === folderId) return;
+    try {
+      await moveDocument(docId, folderId);
+      toast.success("Document moved");
+      qc.invalidateQueries({ queryKey: ["documents"] });
+      qc.invalidateQueries({ queryKey: ["folders"] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not move document");
+    }
+  }
+
   const publishedCount = documents.filter((d) => d.status === "published").length;
   const restrictedCount = documents.filter((d) => d.confidentiality !== "public").length;
   const visibleDeptCount =
@@ -175,6 +188,7 @@ function LibraryPage() {
                     deptName={currentDept.name}
                     path={inFolder ? folderPath : []}
                     onNavigate={goToFolder}
+                    onDropDoc={dropDoc}
                   />
                 ) : (
                   "All documents"
@@ -307,6 +321,7 @@ function LibraryPage() {
                     onOpen={() => goToFolder(f.id)}
                     onRename={() => setRenameTarget(f)}
                     onDeleted={onFolderDeleted}
+                    onDropDoc={(docId) => dropDoc(docId, f.id)}
                   />
                 ))}
               </div>
@@ -389,9 +404,16 @@ function LibraryPage() {
           users={users}
           usersLoading={usersLoading}
           defaultDeptId={deptId}
+          folderId={inFolder ? folder : undefined}
+          folderPath={
+            inFolder && currentDept
+              ? [currentDept.name, ...folderPath.map((c) => c.name)].join(" / ")
+              : undefined
+          }
           onClose={() => setUploadOpen(false)}
           onUploaded={() => {
             qc.invalidateQueries({ queryKey: ["documents"] });
+            qc.invalidateQueries({ queryKey: ["folders"] });
             setUploadOpen(false);
           }}
         />
@@ -520,6 +542,7 @@ function DocCard({
     <article
       role="link"
       tabIndex={0}
+      {...docDragProps(doc.id, canMove)}
       onClick={() => openPdfPreview(doc.id)}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
@@ -679,6 +702,7 @@ function DocTable({
           {docs.map((d) => (
             <tr
               key={d.id}
+              {...docDragProps(d.id, canMove(d))}
               onClick={() => openPdfPreview(d.id)}
               className="group cursor-pointer transition-colors hover:bg-secondary/70"
             >
@@ -791,34 +815,100 @@ function FolderBreadcrumbs({
   deptName,
   path,
   onNavigate,
+  onDropDoc,
 }: {
   deptName: string;
   path: FolderCrumb[];
   onNavigate: (folderId: string | undefined) => void;
+  onDropDoc: (docId: string, folderId: string | null) => void;
 }) {
   const crumbs = [{ id: undefined as string | undefined, name: deptName }, ...path];
   return (
     <nav aria-label="Folder path" className="flex min-w-0 items-center gap-2 truncate">
-      {crumbs.map((c, i) => {
-        const last = i === crumbs.length - 1;
-        return (
-          <span key={c.id ?? "root"} className="flex min-w-0 items-center gap-2">
-            {i > 0 && <span className="text-muted-foreground">/</span>}
-            {last ? (
-              <span className="truncate">{c.name}</span>
-            ) : (
-              <button
-                type="button"
-                onClick={() => onNavigate(c.id)}
-                className="truncate text-muted-foreground hover:text-primary"
-              >
-                {c.name}
-              </button>
-            )}
-          </span>
-        );
-      })}
+      {crumbs.map((c, i) => (
+        <Crumb
+          key={c.id ?? "root"}
+          name={c.name}
+          first={i === 0}
+          last={i === crumbs.length - 1}
+          onNavigate={() => onNavigate(c.id)}
+          onDropDoc={(docId) => onDropDoc(docId, c.id ?? null)}
+        />
+      ))}
     </nav>
+  );
+}
+
+const DOC_DRAG_TYPE = "application/x-pleng-doc";
+
+function useDocDrop(onDropDoc: (docId: string) => void) {
+  const [over, setOver] = useState(false);
+  const handlers = {
+    onDragOver: (e: React.DragEvent) => {
+      if (!e.dataTransfer.types.includes(DOC_DRAG_TYPE)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      setOver(true);
+    },
+    onDragLeave: (e: React.DragEvent) => {
+      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false);
+    },
+    onDrop: (e: React.DragEvent) => {
+      const docId = e.dataTransfer.getData(DOC_DRAG_TYPE);
+      if (!docId) return;
+      e.preventDefault();
+      setOver(false);
+      onDropDoc(docId);
+    },
+  };
+  return { over, handlers };
+}
+
+function docDragProps(docId: string, enabled: boolean) {
+  if (!enabled) return {};
+  return {
+    draggable: true,
+    onDragStart: (e: React.DragEvent) => {
+      e.dataTransfer.setData(DOC_DRAG_TYPE, docId);
+      e.dataTransfer.effectAllowed = "move";
+    },
+  };
+}
+
+function Crumb({
+  name,
+  first,
+  last,
+  onNavigate,
+  onDropDoc,
+}: {
+  name: string;
+  first: boolean;
+  last: boolean;
+  onNavigate: () => void;
+  onDropDoc: (docId: string) => void;
+}) {
+  const { over, handlers } = useDocDrop(onDropDoc);
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      {!first && <span className="text-muted-foreground">/</span>}
+      <span
+        {...handlers}
+        className={`min-w-0 truncate rounded-md px-1 transition-colors ${over ? "bg-primary/15 ring-2 ring-primary" : ""}`}
+      >
+        {last ? (
+          name
+        ) : (
+          <button
+            type="button"
+            onClick={onNavigate}
+            className="truncate text-muted-foreground hover:text-primary"
+          >
+            {name}
+          </button>
+        )}
+      </span>
+    </span>
   );
 }
 
@@ -829,6 +919,7 @@ function FolderTile({
   onOpen,
   onRename,
   onDeleted,
+  onDropDoc,
 }: {
   folder: FolderRow;
   color: string;
@@ -836,8 +927,10 @@ function FolderTile({
   onOpen: () => void;
   onRename: () => void;
   onDeleted: () => void;
+  onDropDoc: (docId: string) => void;
 }) {
   const items = Array.from({ length: Math.min(3, folder.document_count) }, () => ({}));
+  const { over, handlers } = useDocDrop(onDropDoc);
 
   async function remove(e: React.MouseEvent) {
     e.stopPropagation();
@@ -857,13 +950,14 @@ function FolderTile({
       tabIndex={0}
       aria-label={`Open folder ${folder.name}`}
       onClick={onOpen}
+      {...handlers}
       onKeyDown={(e) => {
         if (e.key === "Enter") {
           e.preventDefault();
           onOpen();
         }
       }}
-      className="group relative flex cursor-pointer flex-col items-center rounded-lg p-2 outline-none hover:z-10 hover:bg-secondary/60 focus-within:z-10 focus-visible:ring-2 focus-visible:ring-ring"
+      className={`group relative flex cursor-pointer flex-col items-center rounded-lg p-2 outline-none hover:z-10 hover:bg-secondary/60 focus-within:z-10 focus-visible:ring-2 focus-visible:ring-ring ${over ? "z-10 bg-primary/10 ring-2 ring-primary" : ""}`}
     >
       <Folder
         mode="flap"
@@ -881,12 +975,12 @@ function FolderTile({
       />
       <div className="mt-1 flex w-full min-w-0 flex-wrap items-baseline justify-center gap-x-2 gap-y-0.5 text-center">
         <span
-          className="line-clamp-2 min-w-0 break-words text-2xl font-semibold leading-tight text-foreground"
+          className="line-clamp-2 min-w-0 break-words text-base font-semibold leading-snug text-foreground"
           title={folder.name}
         >
           {folder.name}
         </span>
-        <span className="shrink-0 font-mono text-sm text-muted-foreground">
+        <span className="shrink-0 font-mono text-xs text-muted-foreground">
           {folder.document_count} {folder.document_count === 1 ? "doc" : "docs"}
         </span>
       </div>
@@ -975,7 +1069,7 @@ function FolderNameModal({
           </button>
         </div>
         <form onSubmit={onSubmit} className="space-y-5 p-5">
-          <Input label="Name" value={name} onChange={setName} required />
+          <Input label="Name" value={name} onChange={setName} required autoFocus />
           <div className="flex justify-end gap-2 border-t border-border pt-4">
             <button
               type="button"
@@ -1168,6 +1262,8 @@ function UploadModal({
   users,
   usersLoading,
   defaultDeptId,
+  folderId,
+  folderPath,
   onClose,
   onUploaded,
 }: {
@@ -1175,6 +1271,8 @@ function UploadModal({
   users: LibraryUser[];
   usersLoading: boolean;
   defaultDeptId: string | undefined;
+  folderId?: string;
+  folderPath?: string;
   onClose: () => void;
   onUploaded: () => void;
 }) {
@@ -1215,7 +1313,9 @@ function UploadModal({
       const formData = new FormData();
       formData.set("file", file);
       formData.set("title", title);
+      // Always from state: the Select is disabled inside a folder.
       formData.set("department_id", deptId);
+      if (folderId) formData.set("folder_id", folderId);
       formData.set("confidentiality", confidentiality);
       if (description.trim()) formData.set("description", description.trim());
       if (keywords.trim()) formData.set("keywords", keywords.trim());
@@ -1278,11 +1378,17 @@ function UploadModal({
               Add at least one department before uploading documents.
             </div>
           )}
+          {folderId && folderPath && (
+            <div className="rounded-sm border border-primary/20 bg-primary/5 px-3 py-2 text-xs font-semibold text-muted-foreground">
+              Uploading to: <span className="text-foreground">{folderPath}</span>
+            </div>
+          )}
           <div className="grid gap-3 sm:grid-cols-2">
             <Select
               label="Department"
               value={deptId}
               onChange={setDeptId}
+              disabled={Boolean(folderId)}
               options={departments.map((d) => ({ value: d.id, label: `${d.code} · ${d.name}` }))}
             />
             <Select
@@ -1380,12 +1486,14 @@ function Input({
   onChange,
   required,
   textarea,
+  autoFocus,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   required?: boolean;
   textarea?: boolean;
+  autoFocus?: boolean;
 }) {
   return (
     <label className="block">
@@ -1401,6 +1509,7 @@ function Input({
         <input
           value={value}
           required={required}
+          autoFocus={autoFocus}
           onChange={(e) => onChange(e.target.value)}
           className="form-control"
         />
@@ -1428,16 +1537,23 @@ function Select({
   value,
   onChange,
   options,
+  disabled,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   options: { value: string; label: string }[];
+  disabled?: boolean;
 }) {
   return (
     <label className="block">
       <span className="form-label">{label}</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="form-select">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        className="form-select disabled:cursor-not-allowed disabled:opacity-70"
+      >
         {options.map((o) => (
           <option key={o.value} value={o.value}>
             {o.label}

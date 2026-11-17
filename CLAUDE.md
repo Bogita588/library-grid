@@ -12,3 +12,10 @@ Internal PDF document library for Pleng Limited. Stack: TanStack Start, React, T
 
 ## Current feature: nested folders
 Folders live inside departments, can nest, hold documents and other folders. Existing `folders` table and `documents.folder_id` are already in the schema. A "New folder" button next to Upload, a path (Engineering / Folder-1 / Subfolder 2) in the header, folder tiles using the React Bits Folder component, drag a document onto a folder to move it. Delete a folder only when empty. Existing documents stay at the department root.
+
+## Folder component (src/components/Folder.tsx)
+- Third-party React Bits component, about 2,460 lines. Do NOT read the whole file. Read only the props at the top (FolderProps, lines 18-57) and the default export.
+- Use only for subfolder tiles. Props: mode="flap", variant="solid" (never "glass": WebGL context limit), openOn="hover", draggable={false}, intro={false}, zoomOnClick={false}, size about 0.8, label=folder name, color=the department colour.
+- Hover shows the papers, a click must navigate into the folder (handle onClick on a wrapper div).
+- items: pass up to 3 blank papers (`{}`) based on the folder's document count. When the count is 0 the folder must show no papers. The component falls back to sample items when items is empty (the `source` line near line 1225). Change that one line so an empty array stays empty, and check it in the browser.
+- Drag and drop of documents onto folders is done with normal HTML5 drag events on a wrapper div around each tile, not with the component's own drag.

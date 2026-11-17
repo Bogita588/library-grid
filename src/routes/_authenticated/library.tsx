@@ -19,6 +19,7 @@ import {
   listFolders,
   listUsers,
   moveDocument,
+  moveFolder,
   renameFolder,
   uploadDocument,
   type Department,
@@ -44,6 +45,7 @@ import {
   Trash2,
   FolderPlus,
   FolderInput,
+  Folder as FolderIcon,
   Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -160,6 +162,25 @@ function LibraryPage() {
     }
   }
 
+  async function dropFolder(folderId: string, parentId: string | null) {
+    if (folderId === parentId) return;
+    const moving = subfolders.find((f) => f.id === folderId);
+    if (moving && (moving.parent_id ?? null) === parentId) return;
+    try {
+      await moveFolder(folderId, parentId);
+      toast.success("Folder moved");
+      qc.invalidateQueries({ queryKey: ["folders"] });
+      qc.invalidateQueries({ queryKey: ["documents"] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not move folder");
+    }
+  }
+
+  function dropItem(item: DropItem, target: string | null) {
+    if (item.kind === "doc") void dropDoc(item.id, target);
+    else void dropFolder(item.id, target);
+  }
+
   const publishedCount = documents.filter((d) => d.status === "published").length;
   const restrictedCount = documents.filter((d) => d.confidentiality !== "public").length;
   const visibleDeptCount =
@@ -188,7 +209,7 @@ function LibraryPage() {
                     deptName={currentDept.name}
                     path={inFolder ? folderPath : []}
                     onNavigate={goToFolder}
-                    onDropDoc={dropDoc}
+                    onDropItem={dropItem}
                   />
                 ) : (
                   "All documents"
@@ -321,7 +342,7 @@ function LibraryPage() {
                     onOpen={() => goToFolder(f.id)}
                     onRename={() => setRenameTarget(f)}
                     onDeleted={onFolderDeleted}
-                    onDropDoc={(docId) => dropDoc(docId, f.id)}
+                    onDropItem={(item) => dropItem(item, f.id)}
                   />
                 ))}
               </div>
@@ -815,12 +836,12 @@ function FolderBreadcrumbs({
   deptName,
   path,
   onNavigate,
-  onDropDoc,
+  onDropItem,
 }: {
   deptName: string;
   path: FolderCrumb[];
   onNavigate: (folderId: string | undefined) => void;
-  onDropDoc: (docId: string, folderId: string | null) => void;
+  onDropItem: (item: DropItem, folderId: string | null) => void;
 }) {
   const crumbs = [{ id: undefined as string | undefined, name: deptName }, ...path];
   return (
@@ -832,7 +853,7 @@ function FolderBreadcrumbs({
           first={i === 0}
           last={i === crumbs.length - 1}
           onNavigate={() => onNavigate(c.id)}
-          onDropDoc={(docId) => onDropDoc(docId, c.id ?? null)}
+          onDropItem={(item) => onDropItem(item, c.id ?? null)}
         />
       ))}
     </nav>
@@ -840,12 +861,21 @@ function FolderBreadcrumbs({
 }
 
 const DOC_DRAG_TYPE = "application/x-pleng-doc";
+const FOLDER_DRAG_TYPE = "application/x-pleng-folder";
+// dataTransfer data cannot be read during dragover, so remember which folder is being dragged.
+let draggingFolderId: string | null = null;
 
-function useDocDrop(onDropDoc: (docId: string) => void) {
+type DropItem = { kind: "doc" | "folder"; id: string };
+
+function useDocDrop(onDropItem: (item: DropItem) => void, selfFolderId?: string) {
   const [over, setOver] = useState(false);
   const handlers = {
     onDragOver: (e: React.DragEvent) => {
-      if (!e.dataTransfer.types.includes(DOC_DRAG_TYPE)) return;
+      const types = e.dataTransfer.types;
+      const isDoc = types.includes(DOC_DRAG_TYPE);
+      const isFolder = types.includes(FOLDER_DRAG_TYPE);
+      if (!isDoc && !isFolder) return;
+      if (isFolder && selfFolderId && draggingFolderId === selfFolderId) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = "move";
       setOver(true);
@@ -855,13 +885,29 @@ function useDocDrop(onDropDoc: (docId: string) => void) {
     },
     onDrop: (e: React.DragEvent) => {
       const docId = e.dataTransfer.getData(DOC_DRAG_TYPE);
-      if (!docId) return;
+      const folderId = e.dataTransfer.getData(FOLDER_DRAG_TYPE);
       e.preventDefault();
       setOver(false);
-      onDropDoc(docId);
+      if (docId) onDropItem({ kind: "doc", id: docId });
+      else if (folderId && folderId !== selfFolderId) onDropItem({ kind: "folder", id: folderId });
     },
   };
   return { over, handlers };
+}
+
+function folderDragProps(folderId: string, enabled: boolean) {
+  if (!enabled) return {};
+  return {
+    draggable: true,
+    onDragStart: (e: React.DragEvent) => {
+      draggingFolderId = folderId;
+      e.dataTransfer.setData(FOLDER_DRAG_TYPE, folderId);
+      e.dataTransfer.effectAllowed = "move";
+    },
+    onDragEnd: () => {
+      draggingFolderId = null;
+    },
+  };
 }
 
 function docDragProps(docId: string, enabled: boolean) {
@@ -880,15 +926,15 @@ function Crumb({
   first,
   last,
   onNavigate,
-  onDropDoc,
+  onDropItem,
 }: {
   name: string;
   first: boolean;
   last: boolean;
   onNavigate: () => void;
-  onDropDoc: (docId: string) => void;
+  onDropItem: (item: DropItem) => void;
 }) {
-  const { over, handlers } = useDocDrop(onDropDoc);
+  const { over, handlers } = useDocDrop(onDropItem);
   return (
     <span className="flex min-w-0 items-center gap-2">
       {!first && <span className="text-muted-foreground">/</span>}
@@ -919,7 +965,7 @@ function FolderTile({
   onOpen,
   onRename,
   onDeleted,
-  onDropDoc,
+  onDropItem,
 }: {
   folder: FolderRow;
   color: string;
@@ -927,10 +973,28 @@ function FolderTile({
   onOpen: () => void;
   onRename: () => void;
   onDeleted: () => void;
-  onDropDoc: (docId: string) => void;
+  onDropItem: (item: DropItem) => void;
 }) {
-  const items = Array.from({ length: Math.min(3, folder.document_count) }, () => ({}));
-  const { over, handlers } = useDocDrop(onDropDoc);
+  const subPapers = Math.min(3, folder.subfolder_count);
+  const docPapers = Math.min(3 - subPapers, folder.document_count);
+  const items = [
+    ...Array.from({ length: subPapers }, () => ({
+      content: (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <FolderIcon className="h-6 w-6 text-muted-foreground" />
+        </div>
+      ),
+    })),
+    ...Array.from({ length: docPapers }, () => ({})),
+  ];
+  const countParts = [
+    folder.subfolder_count > 0 &&
+      `${folder.subfolder_count} ${folder.subfolder_count === 1 ? "folder" : "folders"}`,
+    folder.document_count > 0 &&
+      `${folder.document_count} ${folder.document_count === 1 ? "doc" : "docs"}`,
+  ].filter(Boolean);
+  const caption = countParts.length > 0 ? countParts.join(" · ") : "Empty";
+  const { over, handlers } = useDocDrop(onDropItem, folder.id);
 
   async function remove(e: React.MouseEvent) {
     e.stopPropagation();
@@ -951,6 +1015,7 @@ function FolderTile({
       aria-label={`Open folder ${folder.name}`}
       onClick={onOpen}
       {...handlers}
+      {...folderDragProps(folder.id, canEdit)}
       onKeyDown={(e) => {
         if (e.key === "Enter") {
           e.preventDefault();
@@ -981,7 +1046,7 @@ function FolderTile({
           {folder.name}
         </span>
         <span className="shrink-0 font-mono text-xs text-muted-foreground">
-          {folder.document_count} {folder.document_count === 1 ? "doc" : "docs"}
+          {caption}
         </span>
       </div>
       {canEdit && (
@@ -998,7 +1063,7 @@ function FolderTile({
           <Pencil className="h-3.5 w-3.5" />
         </button>
       )}
-      {canEdit && folder.document_count === 0 && (
+      {canEdit && folder.document_count === 0 && folder.subfolder_count === 0 && (
         <button
           type="button"
           onClick={remove}

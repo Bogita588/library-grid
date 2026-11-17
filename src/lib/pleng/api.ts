@@ -63,6 +63,7 @@ export type Folder = {
   created_by: string | null;
   created_at: string;
   document_count: number;
+  subfolder_count: number;
 };
 
 export type FolderCrumb = { id: string; name: string };
@@ -168,6 +169,13 @@ export async function renameFolder(folderId: string, name: string) {
   return api<{ ok: true }>(`/api/folders/${folderId}`, {
     method: "PATCH",
     body: JSON.stringify({ name }),
+  });
+}
+
+export async function moveFolder(folderId: string, parentId: string | null) {
+  return api<{ ok: true }>(`/api/folders/${folderId}/parent`, {
+    method: "PATCH",
+    body: JSON.stringify({ parent_id: parentId }),
   });
 }
 

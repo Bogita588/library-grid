@@ -37,6 +37,7 @@ import { Route as ApiDocumentsDocIdFolderRouteImport } from './routes/api.docume
 import { Route as ApiDocumentsDocIdPreviewRouteImport } from './routes/api.documents.$docId.preview'
 import { Route as ApiDocumentsDocIdVersionsRouteImport } from './routes/api.documents.$docId.versions'
 import { Route as ApiDocumentsDocIdViewUrlRouteImport } from './routes/api.documents.$docId.view-url'
+import { Route as ApiFoldersFolderIdParentRouteImport } from './routes/api.folders.$folderId.parent'
 import { Route as ApiUsersUserIdRoleRouteImport } from './routes/api.users.$userId.role'
 
 const IndexRoute = IndexRouteImport.update({
@@ -184,6 +185,12 @@ const ApiDocumentsDocIdViewUrlRoute =
     path: '/view-url',
     getParentRoute: () => ApiDocumentsDocIdRoute,
   } as any)
+const ApiFoldersFolderIdParentRoute =
+  ApiFoldersFolderIdParentRouteImport.update({
+    id: '/parent',
+    path: '/parent',
+    getParentRoute: () => ApiFoldersFolderIdRoute,
+  } as any)
 const ApiUsersUserIdRoleRoute = ApiUsersUserIdRoleRouteImport.update({
   id: '/$userId/role',
   path: '/$userId/role',
@@ -211,13 +218,14 @@ export interface FileRoutesByFullPath {
   '/api/auth/register': typeof ApiAuthRegisterRoute
   '/api/documents/$docId': typeof ApiDocumentsDocIdRouteWithChildren
   '/api/favorites/$docId': typeof ApiFavoritesDocIdRoute
-  '/api/folders/$folderId': typeof ApiFoldersFolderIdRoute
+  '/api/folders/$folderId': typeof ApiFoldersFolderIdRouteWithChildren
   '/api/document-versions/$versionId/download-url': typeof ApiDocumentVersionsVersionIdDownloadUrlRoute
   '/api/documents/$docId/download-url': typeof ApiDocumentsDocIdDownloadUrlRoute
   '/api/documents/$docId/folder': typeof ApiDocumentsDocIdFolderRoute
   '/api/documents/$docId/preview': typeof ApiDocumentsDocIdPreviewRoute
   '/api/documents/$docId/versions': typeof ApiDocumentsDocIdVersionsRoute
   '/api/documents/$docId/view-url': typeof ApiDocumentsDocIdViewUrlRoute
+  '/api/folders/$folderId/parent': typeof ApiFoldersFolderIdParentRoute
   '/api/users/$userId/role': typeof ApiUsersUserIdRoleRoute
 }
 export interface FileRoutesByTo {
@@ -241,13 +249,14 @@ export interface FileRoutesByTo {
   '/api/auth/register': typeof ApiAuthRegisterRoute
   '/api/documents/$docId': typeof ApiDocumentsDocIdRouteWithChildren
   '/api/favorites/$docId': typeof ApiFavoritesDocIdRoute
-  '/api/folders/$folderId': typeof ApiFoldersFolderIdRoute
+  '/api/folders/$folderId': typeof ApiFoldersFolderIdRouteWithChildren
   '/api/document-versions/$versionId/download-url': typeof ApiDocumentVersionsVersionIdDownloadUrlRoute
   '/api/documents/$docId/download-url': typeof ApiDocumentsDocIdDownloadUrlRoute
   '/api/documents/$docId/folder': typeof ApiDocumentsDocIdFolderRoute
   '/api/documents/$docId/preview': typeof ApiDocumentsDocIdPreviewRoute
   '/api/documents/$docId/versions': typeof ApiDocumentsDocIdVersionsRoute
   '/api/documents/$docId/view-url': typeof ApiDocumentsDocIdViewUrlRoute
+  '/api/folders/$folderId/parent': typeof ApiFoldersFolderIdParentRoute
   '/api/users/$userId/role': typeof ApiUsersUserIdRoleRoute
 }
 export interface FileRoutesById {
@@ -273,13 +282,14 @@ export interface FileRoutesById {
   '/api/auth/register': typeof ApiAuthRegisterRoute
   '/api/documents/$docId': typeof ApiDocumentsDocIdRouteWithChildren
   '/api/favorites/$docId': typeof ApiFavoritesDocIdRoute
-  '/api/folders/$folderId': typeof ApiFoldersFolderIdRoute
+  '/api/folders/$folderId': typeof ApiFoldersFolderIdRouteWithChildren
   '/api/document-versions/$versionId/download-url': typeof ApiDocumentVersionsVersionIdDownloadUrlRoute
   '/api/documents/$docId/download-url': typeof ApiDocumentsDocIdDownloadUrlRoute
   '/api/documents/$docId/folder': typeof ApiDocumentsDocIdFolderRoute
   '/api/documents/$docId/preview': typeof ApiDocumentsDocIdPreviewRoute
   '/api/documents/$docId/versions': typeof ApiDocumentsDocIdVersionsRoute
   '/api/documents/$docId/view-url': typeof ApiDocumentsDocIdViewUrlRoute
+  '/api/folders/$folderId/parent': typeof ApiFoldersFolderIdParentRoute
   '/api/users/$userId/role': typeof ApiUsersUserIdRoleRoute
 }
 export interface FileRouteTypes {
@@ -312,6 +322,7 @@ export interface FileRouteTypes {
     | '/api/documents/$docId/preview'
     | '/api/documents/$docId/versions'
     | '/api/documents/$docId/view-url'
+    | '/api/folders/$folderId/parent'
     | '/api/users/$userId/role'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -342,6 +353,7 @@ export interface FileRouteTypes {
     | '/api/documents/$docId/preview'
     | '/api/documents/$docId/versions'
     | '/api/documents/$docId/view-url'
+    | '/api/folders/$folderId/parent'
     | '/api/users/$userId/role'
   id:
     | '__root__'
@@ -373,6 +385,7 @@ export interface FileRouteTypes {
     | '/api/documents/$docId/preview'
     | '/api/documents/$docId/versions'
     | '/api/documents/$docId/view-url'
+    | '/api/folders/$folderId/parent'
     | '/api/users/$userId/role'
   fileRoutesById: FileRoutesById
 }
@@ -592,6 +605,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiDocumentsDocIdViewUrlRouteImport
       parentRoute: typeof ApiDocumentsDocIdRoute
     }
+    '/api/folders/$folderId/parent': {
+      id: '/api/folders/$folderId/parent'
+      path: '/parent'
+      fullPath: '/api/folders/$folderId/parent'
+      preLoaderRoute: typeof ApiFoldersFolderIdParentRouteImport
+      parentRoute: typeof ApiFoldersFolderIdRoute
+    }
     '/api/users/$userId/role': {
       id: '/api/users/$userId/role'
       path: '/$userId/role'
@@ -673,12 +693,23 @@ const ApiFavoritesRouteWithChildren = ApiFavoritesRoute._addFileChildren(
   ApiFavoritesRouteChildren,
 )
 
+interface ApiFoldersFolderIdRouteChildren {
+  ApiFoldersFolderIdParentRoute: typeof ApiFoldersFolderIdParentRoute
+}
+
+const ApiFoldersFolderIdRouteChildren: ApiFoldersFolderIdRouteChildren = {
+  ApiFoldersFolderIdParentRoute: ApiFoldersFolderIdParentRoute,
+}
+
+const ApiFoldersFolderIdRouteWithChildren =
+  ApiFoldersFolderIdRoute._addFileChildren(ApiFoldersFolderIdRouteChildren)
+
 interface ApiFoldersRouteChildren {
-  ApiFoldersFolderIdRoute: typeof ApiFoldersFolderIdRoute
+  ApiFoldersFolderIdRoute: typeof ApiFoldersFolderIdRouteWithChildren
 }
 
 const ApiFoldersRouteChildren: ApiFoldersRouteChildren = {
-  ApiFoldersFolderIdRoute: ApiFoldersFolderIdRoute,
+  ApiFoldersFolderIdRoute: ApiFoldersFolderIdRouteWithChildren,
 }
 
 const ApiFoldersRouteWithChildren = ApiFoldersRoute._addFileChildren(

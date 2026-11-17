@@ -36,6 +36,7 @@ type FolderRow = {
   created_by: string | null;
   created_at: string;
   document_count: number;
+  subfolder_count: number;
 };
 
 async function folderInDepartment(folderId: string, departmentId: string) {
@@ -104,7 +105,8 @@ export async function listFolders(user: AuthUser, input: unknown) {
                SELECT count(*)::int
                FROM documents d
                WHERE d.folder_id = f.id AND ${visible}
-             ) AS document_count
+             ) AS document_count,
+             (SELECT count(*)::int FROM folders c WHERE c.parent_id = f.id) AS subfolder_count
       FROM folders f
       WHERE f.department_id = $1
         AND f.parent_id IS NOT DISTINCT FROM $2::uuid
@@ -216,6 +218,64 @@ export async function renameFolder(user: AuthUser, folderId: string, input: unkn
   await query(
     "INSERT INTO audit_logs (user_id, action, entity_type, entity_id, metadata) VALUES ($1, 'folder.renamed', 'folder', $2, $3)",
     [user.id, id, JSON.stringify({ from: folder.name, to: name })],
+  );
+  return { ok: true };
+}
+
+const moveFolderSchema = z.object({
+  parent_id: z.string().uuid().nullable(),
+});
+
+export async function moveFolder(user: AuthUser, folderId: string, input: unknown) {
+  const id = idSchema.parse(folderId);
+  const { parent_id } = moveFolderSchema.parse(input);
+  const { rows } = await query<{
+    department_id: string;
+    parent_id: string | null;
+    created_by: string | null;
+  }>("SELECT department_id, parent_id, created_by FROM folders WHERE id = $1", [id]);
+  const folder = rows[0];
+  if (!folder) throw new ApiError(404, "Folder not found");
+  if (!isAdmin(user) && folder.created_by !== user.id) {
+    throw new ApiError(403, "You cannot move this folder");
+  }
+  if (folder.parent_id === parent_id) return { ok: true };
+
+  if (parent_id) {
+    if (parent_id === id) throw new ApiError(400, "A folder cannot be moved into itself");
+    await folderInDepartment(parent_id, folder.department_id);
+    // Walk up from the target; if we meet the folder being moved, the target is inside it.
+    const cycle = await query(
+      `
+        WITH RECURSIVE chain AS (
+          SELECT id, parent_id, 0 AS depth FROM folders WHERE id = $1
+          UNION ALL
+          SELECT f.id, f.parent_id, c.depth + 1
+          FROM folders f
+          JOIN chain c ON f.id = c.parent_id
+          WHERE c.depth < 50
+        )
+        SELECT 1 FROM chain WHERE id = $2
+      `,
+      [parent_id, id],
+    );
+    if ((cycle.rowCount ?? 0) > 0) {
+      throw new ApiError(400, "A folder cannot be moved into one of its own subfolders");
+    }
+  }
+
+  try {
+    await query("UPDATE folders SET parent_id = $1 WHERE id = $2", [parent_id, id]);
+  } catch (error) {
+    if ((error as { code?: string }).code === "23505") {
+      throw new ApiError(409, "A folder with that name already exists there");
+    }
+    throw error;
+  }
+
+  await query(
+    "INSERT INTO audit_logs (user_id, action, entity_type, entity_id, metadata) VALUES ($1, 'folder.moved', 'folder', $2, $3)",
+    [user.id, id, JSON.stringify({ from: folder.parent_id, to: parent_id })],
   );
   return { ok: true };
 }

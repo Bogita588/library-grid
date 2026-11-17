@@ -8,16 +8,26 @@ import {
   getDocumentStatusLabel,
 } from "@/lib/document-status";
 import {
+  createFolder,
   currentUser,
   deleteDocument,
+  deleteFolder,
   documentDownloadUrl,
   listDepartments,
   listDocuments,
+  listAllFolders,
+  listFolders,
   listUsers,
+  moveDocument,
+  moveFolder,
+  renameFolder,
   uploadDocument,
   type Department,
   type DocumentRow as DocRow,
+  type Folder as FolderRow,
+  type FolderCrumb,
 } from "@/lib/pleng/api";
+import Folder from "@/components/Folder";
 import { canContributeRole, isAdminRole, type AppRole } from "@/lib/roles";
 import {
   Search,
@@ -33,6 +43,10 @@ import {
   Mail,
   MessageCircle,
   Trash2,
+  FolderPlus,
+  FolderInput,
+  Folder as FolderIcon,
+  Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -47,6 +61,7 @@ const searchSchema = z.object({
   q: z.string().optional(),
   dept: z.string().optional(),
   status: statusSearchSchema,
+  folder: z.string().uuid().optional().catch(undefined),
 });
 
 export const Route = createFileRoute("/_authenticated/library")({
@@ -56,9 +71,13 @@ export const Route = createFileRoute("/_authenticated/library")({
 });
 
 function LibraryPage() {
-  const { q, dept, status } = Route.useSearch();
+  const { q, dept, status, folder } = Route.useSearch();
+  const navigate = Route.useNavigate();
   const [view, setView] = useState<"grid" | "list">("grid");
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [newFolderOpen, setNewFolderOpen] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<FolderRow | null>(null);
+  const [moveTarget, setMoveTarget] = useState<DocRow | null>(null);
   const qc = useQueryClient();
 
   const { data: departments = [] } = useQuery<Department[]>({
@@ -78,6 +97,18 @@ function LibraryPage() {
   const canUpload = canContributeRole(currentRole);
   const canManageDocuments = isAdminRole(currentRole);
 
+  const { data: me } = useQuery({
+    queryKey: ["current-user"],
+    queryFn: async () => {
+      const { user } = await currentUser();
+      return user ? { id: user.id, role: user.role } : null;
+    },
+  });
+  const meIsAdmin = isAdminRole(me?.role);
+  const canEditFolder = (f: FolderRow) => Boolean(me && (meIsAdmin || f.created_by === me.id));
+  const canMove = (d: DocRow) =>
+    Boolean(me && (meIsAdmin || d.owner_id === me.id || d.uploaded_by === me.id));
+
   const { data: users = [], isLoading: usersLoading } = useQuery<LibraryUser[]>({
     queryKey: ["users", "document-viewers"],
     enabled: canUpload,
@@ -85,15 +116,71 @@ function LibraryPage() {
   });
 
   const { data: documents = [], isLoading } = useQuery<DocRow[]>({
-    queryKey: ["documents", { q, dept, status }],
+    queryKey: ["documents", { q, dept, status, folder }],
     queryFn: async () => {
-      const { documents } = await listDocuments({ q: q?.trim() || undefined, dept, status });
+      const { documents } = await listDocuments({
+        q: q?.trim() || undefined,
+        dept,
+        status,
+        folder: dept ? folder : undefined,
+      });
       return documents;
     },
   });
 
+  const { data: folderData } = useQuery({
+    queryKey: ["folders", dept, folder],
+    enabled: Boolean(dept),
+    queryFn: () => listFolders({ dept: dept!, parent: folder }),
+  });
+  const searching = Boolean(q?.trim());
+  const subfolders = dept && !searching ? (folderData?.folders ?? []) : [];
+  const folderPath = folderData?.path ?? [];
+
   const currentDept = departments.find((d) => d.slug === dept);
+  const deptColor = currentDept?.color ?? "oklch(0.43 0.13 198)";
   const hasFilters = Boolean(q?.trim() || dept || status);
+  const inFolder = Boolean(dept && folder);
+
+  function goToFolder(id: string | undefined) {
+    navigate({
+      search: (p: typeof Route.types.searchSchemaInput) => ({ ...p, folder: id }),
+    });
+  }
+
+  const onFolderDeleted = () => qc.invalidateQueries({ queryKey: ["folders"] });
+  async function dropDoc(docId: string, folderId: string | null) {
+    const doc = documents.find((d) => d.id === docId);
+    if (doc && (doc.folder_id ?? null) === folderId) return;
+    try {
+      await moveDocument(docId, folderId);
+      toast.success("Document moved");
+      qc.invalidateQueries({ queryKey: ["documents"] });
+      qc.invalidateQueries({ queryKey: ["folders"] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not move document");
+    }
+  }
+
+  async function dropFolder(folderId: string, parentId: string | null) {
+    if (folderId === parentId) return;
+    const moving = subfolders.find((f) => f.id === folderId);
+    if (moving && (moving.parent_id ?? null) === parentId) return;
+    try {
+      await moveFolder(folderId, parentId);
+      toast.success("Folder moved");
+      qc.invalidateQueries({ queryKey: ["folders"] });
+      qc.invalidateQueries({ queryKey: ["documents"] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not move folder");
+    }
+  }
+
+  function dropItem(item: DropItem, target: string | null) {
+    if (item.kind === "doc") void dropDoc(item.id, target);
+    else void dropFolder(item.id, target);
+  }
+
   const publishedCount = documents.filter((d) => d.status === "published").length;
   const restrictedCount = documents.filter((d) => d.confidentiality !== "public").length;
   const visibleDeptCount =
@@ -117,7 +204,16 @@ function LibraryPage() {
             </div>
             <div className="mt-2 flex min-w-0 items-center gap-3">
               <h1 className="truncate text-2xl font-bold text-foreground sm:text-3xl">
-                {currentDept ? currentDept.name : "All documents"}
+                {currentDept ? (
+                  <FolderBreadcrumbs
+                    deptName={currentDept.name}
+                    path={inFolder ? folderPath : []}
+                    onNavigate={goToFolder}
+                    onDropItem={dropItem}
+                  />
+                ) : (
+                  "All documents"
+                )}
               </h1>
               <div className="shrink-0 rounded-md border border-border bg-secondary px-2 py-1 text-[10px] font-mono uppercase text-muted-foreground">
                 {documents.length} docs
@@ -156,6 +252,15 @@ function LibraryPage() {
                 className="inline-flex h-11 items-center justify-center gap-1.5 rounded-md bg-accent px-4 text-xs font-bold uppercase text-accent-foreground shadow-lg shadow-black/10 hover:bg-accent/92"
               >
                 <Upload className="h-3.5 w-3.5" /> Upload
+              </button>
+            )}
+
+            {canUpload && currentDept && (
+              <button
+                onClick={() => setNewFolderOpen(true)}
+                className="inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-md border border-input bg-card px-4 text-xs font-bold uppercase text-foreground shadow-sm hover:bg-secondary"
+              >
+                <FolderPlus className="h-3.5 w-3.5" /> New folder
               </button>
             )}
           </div>
@@ -217,39 +322,102 @@ function LibraryPage() {
           <div className="flex items-center justify-center py-24 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading library…
           </div>
-        ) : documents.length === 0 ? (
+        ) : documents.length === 0 && subfolders.length === 0 ? (
           <EmptyState
             canUpload={canUpload}
-            hasFilters={hasFilters}
+            hasFilters={hasFilters && !inFolder}
+            inFolder={inFolder}
             onUpload={() => setUploadOpen(true)}
           />
-        ) : view === "grid" ? (
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-            {documents.map((doc) => (
-              <DocCard
-                key={doc.id}
-                doc={doc}
+        ) : (
+          <>
+            {subfolders.length > 0 && (
+              <div className="mb-6 grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
+                {subfolders.map((f) => (
+                  <FolderTile
+                    key={f.id}
+                    folder={f}
+                    color={deptColor}
+                    canEdit={canEditFolder(f)}
+                    onOpen={() => goToFolder(f.id)}
+                    onRename={() => setRenameTarget(f)}
+                    onDeleted={onFolderDeleted}
+                    onDropItem={(item) => dropItem(item, f.id)}
+                  />
+                ))}
+              </div>
+            )}
+            {documents.length === 0 ? null : view === "grid" ? (
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+                {documents.map((doc) => (
+                  <DocCard
+                    key={doc.id}
+                    doc={doc}
+                    canManageDocuments={canManageDocuments}
+                    canMove={canMove(doc)}
+                    onMove={() => setMoveTarget(doc)}
+                    onDeleted={() => {
+                      qc.invalidateQueries({ queryKey: ["documents"] });
+                      qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
+                      qc.invalidateQueries({ queryKey: ["favorites"] });
+                    }}
+                  />
+                ))}
+              </div>
+            ) : (
+              <DocTable
+                docs={documents}
                 canManageDocuments={canManageDocuments}
+                canMove={canMove}
+                onMove={setMoveTarget}
                 onDeleted={() => {
                   qc.invalidateQueries({ queryKey: ["documents"] });
                   qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
                   qc.invalidateQueries({ queryKey: ["favorites"] });
                 }}
               />
-            ))}
-          </div>
-        ) : (
-          <DocTable
-            docs={documents}
-            canManageDocuments={canManageDocuments}
-            onDeleted={() => {
-              qc.invalidateQueries({ queryKey: ["documents"] });
-              qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
-              qc.invalidateQueries({ queryKey: ["favorites"] });
-            }}
-          />
+            )}
+          </>
         )}
       </div>
+
+      {newFolderOpen && canUpload && currentDept && (
+        <FolderNameModal
+          departmentId={currentDept.id}
+          parentId={inFolder ? folder : undefined}
+          onClose={() => setNewFolderOpen(false)}
+          onSaved={() => {
+            qc.invalidateQueries({ queryKey: ["folders"] });
+            setNewFolderOpen(false);
+          }}
+        />
+      )}
+
+      {renameTarget && (
+        <FolderNameModal
+          departmentId={renameTarget.department_id}
+          parentId={renameTarget.parent_id ?? undefined}
+          folder={renameTarget}
+          onClose={() => setRenameTarget(null)}
+          onSaved={() => {
+            qc.invalidateQueries({ queryKey: ["folders"] });
+            setRenameTarget(null);
+          }}
+        />
+      )}
+
+      {moveTarget && (
+        <MoveDocumentModal
+          doc={moveTarget}
+          department={departments.find((d) => d.id === moveTarget.department_id)}
+          onClose={() => setMoveTarget(null)}
+          onMoved={() => {
+            qc.invalidateQueries({ queryKey: ["documents"] });
+            qc.invalidateQueries({ queryKey: ["folders"] });
+            setMoveTarget(null);
+          }}
+        />
+      )}
 
       {uploadOpen && canUpload && (
         <UploadModal
@@ -257,9 +425,16 @@ function LibraryPage() {
           users={users}
           usersLoading={usersLoading}
           defaultDeptId={deptId}
+          folderId={inFolder ? folder : undefined}
+          folderPath={
+            inFolder && currentDept
+              ? [currentDept.name, ...folderPath.map((c) => c.name)].join(" / ")
+              : undefined
+          }
           onClose={() => setUploadOpen(false)}
           onUploaded={() => {
             qc.invalidateQueries({ queryKey: ["documents"] });
+            qc.invalidateQueries({ queryKey: ["folders"] });
             setUploadOpen(false);
           }}
         />
@@ -353,13 +528,34 @@ function addedBy(doc: DocRow) {
   return doc.uploader?.full_name || doc.uploader?.email || "Unknown user";
 }
 
+function MoveButton({ title, onClick }: { title: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onClick();
+      }}
+      title="Move to..."
+      aria-label={`Move ${title} to another folder`}
+      className="inline-flex h-8 w-8 items-center justify-center rounded-sm border border-input bg-card text-muted-foreground shadow-sm transition-colors hover:border-primary/50 hover:bg-primary hover:text-primary-foreground"
+    >
+      <FolderInput className="h-3.5 w-3.5" />
+    </button>
+  );
+}
+
 function DocCard({
   doc,
   canManageDocuments,
+  canMove,
+  onMove,
   onDeleted,
 }: {
   doc: DocRow;
   canManageDocuments: boolean;
+  canMove: boolean;
+  onMove: () => void;
   onDeleted: () => void;
 }) {
   const color = doc.departments?.color ?? "oklch(0.43 0.13 198)";
@@ -367,6 +563,7 @@ function DocCard({
     <article
       role="link"
       tabIndex={0}
+      {...docDragProps(doc.id, canMove)}
       onClick={() => openPdfPreview(doc.id)}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
@@ -447,6 +644,7 @@ function DocCard({
           >
             <Download className="h-3.5 w-3.5" />
           </button>
+          {canMove && <MoveButton title={doc.title} onClick={onMove} />}
           {canManageDocuments && (
             <>
               <button
@@ -496,10 +694,14 @@ function DocCard({
 function DocTable({
   docs,
   canManageDocuments,
+  canMove,
+  onMove,
   onDeleted,
 }: {
   docs: DocRow[];
   canManageDocuments: boolean;
+  canMove: (doc: DocRow) => boolean;
+  onMove: (doc: DocRow) => void;
   onDeleted: () => void;
 }) {
   return (
@@ -521,6 +723,7 @@ function DocTable({
           {docs.map((d) => (
             <tr
               key={d.id}
+              {...docDragProps(d.id, canMove(d))}
               onClick={() => openPdfPreview(d.id)}
               className="group cursor-pointer transition-colors hover:bg-secondary/70"
             >
@@ -571,6 +774,7 @@ function DocTable({
                   >
                     <Download className="h-3.5 w-3.5" />
                   </button>
+                  {canMove(d) && <MoveButton title={d.title} onClick={() => onMove(d)} />}
                   {canManageDocuments && (
                     <>
                       <button
@@ -628,13 +832,453 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+function FolderBreadcrumbs({
+  deptName,
+  path,
+  onNavigate,
+  onDropItem,
+}: {
+  deptName: string;
+  path: FolderCrumb[];
+  onNavigate: (folderId: string | undefined) => void;
+  onDropItem: (item: DropItem, folderId: string | null) => void;
+}) {
+  const crumbs = [{ id: undefined as string | undefined, name: deptName }, ...path];
+  return (
+    <nav aria-label="Folder path" className="flex min-w-0 items-center gap-2 truncate">
+      {crumbs.map((c, i) => (
+        <Crumb
+          key={c.id ?? "root"}
+          name={c.name}
+          first={i === 0}
+          last={i === crumbs.length - 1}
+          onNavigate={() => onNavigate(c.id)}
+          onDropItem={(item) => onDropItem(item, c.id ?? null)}
+        />
+      ))}
+    </nav>
+  );
+}
+
+const DOC_DRAG_TYPE = "application/x-pleng-doc";
+const FOLDER_DRAG_TYPE = "application/x-pleng-folder";
+// dataTransfer data cannot be read during dragover, so remember which folder is being dragged.
+let draggingFolderId: string | null = null;
+
+type DropItem = { kind: "doc" | "folder"; id: string };
+
+function useDocDrop(onDropItem: (item: DropItem) => void, selfFolderId?: string) {
+  const [over, setOver] = useState(false);
+  const handlers = {
+    onDragOver: (e: React.DragEvent) => {
+      const types = e.dataTransfer.types;
+      const isDoc = types.includes(DOC_DRAG_TYPE);
+      const isFolder = types.includes(FOLDER_DRAG_TYPE);
+      if (!isDoc && !isFolder) return;
+      if (isFolder && selfFolderId && draggingFolderId === selfFolderId) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      setOver(true);
+    },
+    onDragLeave: (e: React.DragEvent) => {
+      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false);
+    },
+    onDrop: (e: React.DragEvent) => {
+      const docId = e.dataTransfer.getData(DOC_DRAG_TYPE);
+      const folderId = e.dataTransfer.getData(FOLDER_DRAG_TYPE);
+      e.preventDefault();
+      setOver(false);
+      if (docId) onDropItem({ kind: "doc", id: docId });
+      else if (folderId && folderId !== selfFolderId) onDropItem({ kind: "folder", id: folderId });
+    },
+  };
+  return { over, handlers };
+}
+
+function folderDragProps(folderId: string, enabled: boolean) {
+  if (!enabled) return {};
+  return {
+    draggable: true,
+    onDragStart: (e: React.DragEvent) => {
+      draggingFolderId = folderId;
+      e.dataTransfer.setData(FOLDER_DRAG_TYPE, folderId);
+      e.dataTransfer.effectAllowed = "move";
+    },
+    onDragEnd: () => {
+      draggingFolderId = null;
+    },
+  };
+}
+
+function docDragProps(docId: string, enabled: boolean) {
+  if (!enabled) return {};
+  return {
+    draggable: true,
+    onDragStart: (e: React.DragEvent) => {
+      e.dataTransfer.setData(DOC_DRAG_TYPE, docId);
+      e.dataTransfer.effectAllowed = "move";
+    },
+  };
+}
+
+function Crumb({
+  name,
+  first,
+  last,
+  onNavigate,
+  onDropItem,
+}: {
+  name: string;
+  first: boolean;
+  last: boolean;
+  onNavigate: () => void;
+  onDropItem: (item: DropItem) => void;
+}) {
+  const { over, handlers } = useDocDrop(onDropItem);
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      {!first && <span className="text-muted-foreground">/</span>}
+      <span
+        {...handlers}
+        className={`min-w-0 truncate rounded-md px-1 transition-colors ${over ? "bg-primary/15 ring-2 ring-primary" : ""}`}
+      >
+        {last ? (
+          name
+        ) : (
+          <button
+            type="button"
+            onClick={onNavigate}
+            className="truncate text-muted-foreground hover:text-primary"
+          >
+            {name}
+          </button>
+        )}
+      </span>
+    </span>
+  );
+}
+
+function FolderTile({
+  folder,
+  color,
+  canEdit,
+  onOpen,
+  onRename,
+  onDeleted,
+  onDropItem,
+}: {
+  folder: FolderRow;
+  color: string;
+  canEdit: boolean;
+  onOpen: () => void;
+  onRename: () => void;
+  onDeleted: () => void;
+  onDropItem: (item: DropItem) => void;
+}) {
+  const subPapers = Math.min(3, folder.subfolder_count);
+  const docPapers = Math.min(3 - subPapers, folder.document_count);
+  const items = [
+    ...Array.from({ length: subPapers }, () => ({
+      content: (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <FolderIcon className="h-6 w-6 text-muted-foreground" />
+        </div>
+      ),
+    })),
+    ...Array.from({ length: docPapers }, () => ({})),
+  ];
+  const countParts = [
+    folder.subfolder_count > 0 &&
+      `${folder.subfolder_count} ${folder.subfolder_count === 1 ? "folder" : "folders"}`,
+    folder.document_count > 0 &&
+      `${folder.document_count} ${folder.document_count === 1 ? "doc" : "docs"}`,
+  ].filter(Boolean);
+  const caption = countParts.length > 0 ? countParts.join(" · ") : "Empty";
+  const { over, handlers } = useDocDrop(onDropItem, folder.id);
+
+  async function remove(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!confirm(`Delete folder "${folder.name}"?`)) return;
+    try {
+      await deleteFolder(folder.id);
+      toast.success("Folder deleted");
+      onDeleted();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Delete failed");
+    }
+  }
+
+  return (
+    <div
+      role="link"
+      tabIndex={0}
+      aria-label={`Open folder ${folder.name}`}
+      onClick={onOpen}
+      {...handlers}
+      {...folderDragProps(folder.id, canEdit)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+      className={`group relative flex cursor-pointer flex-col items-center rounded-lg p-2 outline-none hover:z-10 hover:bg-secondary/60 focus-within:z-10 focus-visible:ring-2 focus-visible:ring-ring ${over ? "z-10 bg-primary/10 ring-2 ring-primary" : ""}`}
+    >
+      <Folder
+        mode="flap"
+        variant="solid"
+        openOn="hover"
+        draggable={false}
+        intro={false}
+        zoomOnClick={false}
+        size={0.8}
+        layout="stack"
+        tilt={0.2}
+        bounce={0.15}
+        color={color}
+        items={items}
+      />
+      <div className="mt-1 flex w-full min-w-0 flex-wrap items-baseline justify-center gap-x-2 gap-y-0.5 text-center">
+        <span
+          className="line-clamp-2 min-w-0 break-words text-base font-semibold leading-snug text-foreground"
+          title={folder.name}
+        >
+          {folder.name}
+        </span>
+        <span className="shrink-0 font-mono text-xs text-muted-foreground">
+          {caption}
+        </span>
+      </div>
+      {canEdit && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRename();
+          }}
+          title="Rename folder"
+          aria-label={`Rename folder ${folder.name}`}
+          className="absolute left-1 top-1 inline-flex h-7 w-7 items-center justify-center rounded-sm border border-input bg-card text-muted-foreground opacity-0 shadow-sm transition-opacity hover:bg-secondary hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
+      )}
+      {canEdit && folder.document_count === 0 && folder.subfolder_count === 0 && (
+        <button
+          type="button"
+          onClick={remove}
+          title="Delete folder"
+          aria-label={`Delete folder ${folder.name}`}
+          className="absolute right-1 top-1 inline-flex h-7 w-7 items-center justify-center rounded-sm border border-input bg-card text-destructive opacity-0 shadow-sm transition-opacity hover:bg-destructive/10 group-hover:opacity-100 focus-visible:opacity-100"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function FolderNameModal({
+  departmentId,
+  parentId,
+  folder,
+  onClose,
+  onSaved,
+}: {
+  departmentId: string;
+  parentId: string | undefined;
+  folder?: FolderRow;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [name, setName] = useState(folder?.name ?? "");
+  const [saving, setSaving] = useState(false);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setSaving(true);
+    try {
+      if (folder) {
+        await renameFolder(folder.id, trimmed);
+        toast.success("Folder renamed");
+      } else {
+        await createFolder({ department_id: departmentId, parent_id: parentId, name: trimmed });
+        toast.success("Folder created");
+      }
+      onSaved();
+    } catch (err) {
+      const fallback = folder ? "Could not rename folder" : "Could not create folder";
+      toast.error(err instanceof Error ? err.message : fallback);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 p-4 backdrop-blur-sm">
+      <div className="form-panel w-full max-w-md overflow-hidden animate-reveal">
+        <div className="form-panel-header flex items-center justify-between px-5 py-4">
+          <div>
+            <div className="text-xs font-bold uppercase text-primary">
+              {folder ? "Edit entry" : "New entry"}
+            </div>
+            <h2 className="text-lg font-bold">{folder ? "Rename folder" : "New folder"}</h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground text-lg leading-none"
+          >
+            ×
+          </button>
+        </div>
+        <form onSubmit={onSubmit} className="space-y-5 p-5">
+          <Input label="Name" value={name} onChange={setName} required autoFocus />
+          <div className="flex justify-end gap-2 border-t border-border pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md px-3 py-2 text-xs font-bold uppercase text-muted-foreground hover:bg-secondary hover:text-foreground"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving || !name.trim()}
+              className="action-primary h-10 px-4"
+            >
+              {saving && <Loader2 className="h-3 w-3 animate-spin" />}
+              {folder ? "Save" : "Create"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function MoveDocumentModal({
+  doc,
+  department,
+  onClose,
+  onMoved,
+}: {
+  doc: DocRow;
+  department: Department | undefined;
+  onClose: () => void;
+  onMoved: () => void;
+}) {
+  const current = doc.folder_id ?? null;
+  const [target, setTarget] = useState<string | null>(current);
+  const [saving, setSaving] = useState(false);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["folders", { all: department?.slug }],
+    enabled: Boolean(department),
+    queryFn: () => listAllFolders(department!.slug),
+  });
+  const options = [
+    { id: null as string | null, path: department?.name ?? "Department root" },
+    ...(data?.folders ?? []),
+  ];
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (target === current) return;
+    setSaving(true);
+    try {
+      await moveDocument(doc.id, target);
+      toast.success("Document moved");
+      onMoved();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not move document");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 p-4 backdrop-blur-sm">
+      <div className="form-panel w-full max-w-md overflow-hidden animate-reveal">
+        <div className="form-panel-header flex items-center justify-between px-5 py-4">
+          <div className="min-w-0">
+            <div className="text-xs font-bold uppercase text-primary">Move to...</div>
+            <h2 className="truncate text-lg font-bold">{doc.title}</h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground text-lg leading-none"
+          >
+            ×
+          </button>
+        </div>
+        <form onSubmit={onSubmit} className="space-y-5 p-5">
+          {isLoading ? (
+            <div className="flex items-center text-sm text-muted-foreground">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading folders…
+            </div>
+          ) : (
+            <div className="max-h-72 space-y-1 overflow-y-auto">
+              {options.map((o) => {
+                const isCurrent = o.id === current;
+                return (
+                  <label
+                    key={o.id ?? "root"}
+                    className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm ${isCurrent ? "text-muted-foreground" : "cursor-pointer hover:bg-secondary"}`}
+                  >
+                    <input
+                      type="radio"
+                      name="move-target"
+                      checked={target === o.id}
+                      disabled={isCurrent}
+                      onChange={() => setTarget(o.id)}
+                    />
+                    <span className="truncate" title={o.path}>
+                      {o.path}
+                    </span>
+                    {isCurrent && (
+                      <span className="ml-auto shrink-0 text-[10px] font-mono uppercase">
+                        Current
+                      </span>
+                    )}
+                  </label>
+                );
+              })}
+            </div>
+          )}
+          <div className="flex justify-end gap-2 border-t border-border pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md px-3 py-2 text-xs font-bold uppercase text-muted-foreground hover:bg-secondary hover:text-foreground"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving || target === current}
+              className="action-primary h-10 px-4"
+            >
+              {saving && <Loader2 className="h-3 w-3 animate-spin" />}
+              Move
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function EmptyState({
   canUpload,
   hasFilters,
+  inFolder = false,
   onUpload,
 }: {
   canUpload: boolean;
   hasFilters: boolean;
+  inFolder?: boolean;
   onUpload: () => void;
 }) {
   return (
@@ -646,7 +1290,7 @@ function EmptyState({
         {hasFilters ? "No matches" : "Empty shelf"}
       </div>
       <h3 className="mt-1 text-lg font-bold">
-        {hasFilters ? "No documents found" : "No documents yet"}
+        {hasFilters ? "No documents found" : inFolder ? "This folder is empty" : "No documents yet"}
       </h3>
       <p className="mt-1 text-sm text-muted-foreground max-w-sm">
         {hasFilters
@@ -683,6 +1327,8 @@ function UploadModal({
   users,
   usersLoading,
   defaultDeptId,
+  folderId,
+  folderPath,
   onClose,
   onUploaded,
 }: {
@@ -690,6 +1336,8 @@ function UploadModal({
   users: LibraryUser[];
   usersLoading: boolean;
   defaultDeptId: string | undefined;
+  folderId?: string;
+  folderPath?: string;
   onClose: () => void;
   onUploaded: () => void;
 }) {
@@ -730,7 +1378,9 @@ function UploadModal({
       const formData = new FormData();
       formData.set("file", file);
       formData.set("title", title);
+      // Always from state: the Select is disabled inside a folder.
       formData.set("department_id", deptId);
+      if (folderId) formData.set("folder_id", folderId);
       formData.set("confidentiality", confidentiality);
       if (description.trim()) formData.set("description", description.trim());
       if (keywords.trim()) formData.set("keywords", keywords.trim());
@@ -793,11 +1443,17 @@ function UploadModal({
               Add at least one department before uploading documents.
             </div>
           )}
+          {folderId && folderPath && (
+            <div className="rounded-sm border border-primary/20 bg-primary/5 px-3 py-2 text-xs font-semibold text-muted-foreground">
+              Uploading to: <span className="text-foreground">{folderPath}</span>
+            </div>
+          )}
           <div className="grid gap-3 sm:grid-cols-2">
             <Select
               label="Department"
               value={deptId}
               onChange={setDeptId}
+              disabled={Boolean(folderId)}
               options={departments.map((d) => ({ value: d.id, label: `${d.code} · ${d.name}` }))}
             />
             <Select
@@ -895,12 +1551,14 @@ function Input({
   onChange,
   required,
   textarea,
+  autoFocus,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   required?: boolean;
   textarea?: boolean;
+  autoFocus?: boolean;
 }) {
   return (
     <label className="block">
@@ -916,6 +1574,7 @@ function Input({
         <input
           value={value}
           required={required}
+          autoFocus={autoFocus}
           onChange={(e) => onChange(e.target.value)}
           className="form-control"
         />
@@ -943,16 +1602,23 @@ function Select({
   value,
   onChange,
   options,
+  disabled,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   options: { value: string; label: string }[];
+  disabled?: boolean;
 }) {
   return (
     <label className="block">
       <span className="form-label">{label}</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="form-select">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        className="form-select disabled:cursor-not-allowed disabled:opacity-70"
+      >
         {options.map((o) => (
           <option key={o.value} value={o.value}>
             {o.label}

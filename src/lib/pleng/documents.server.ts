@@ -27,6 +27,7 @@ const listSchema = z.object({
   q: z.string().optional(),
   dept: z.string().optional(),
   status: z.enum(statuses).optional(),
+  folder: z.string().uuid().optional(),
 });
 
 const statusSchema = z.object({
@@ -52,6 +53,7 @@ type DocumentRow = {
   published_by: string | null;
   published_at: string | null;
   department_id: string;
+  folder_id: string | null;
   department_name: string | null;
   department_code: string | null;
   department_color: string | null;
@@ -98,7 +100,7 @@ type ViewUrlResult = {
 
 type PdfFileResult = ViewUrlResult;
 
-function visibilityWhere(user: AuthUser, params: unknown[]) {
+export function visibilityWhere(user: AuthUser, params: unknown[]) {
   if (isAdmin(user)) {
     return "TRUE";
   }
@@ -136,6 +138,7 @@ function mapDocument(row: DocumentRow) {
     published_by: row.published_by,
     published_at: row.published_at,
     department_id: row.department_id,
+    folder_id: row.folder_id,
     departments: row.department_name
       ? {
           name: row.department_name,
@@ -489,6 +492,10 @@ export async function listDocuments(user: AuthUser, input: unknown) {
   if (filters.q?.trim()) {
     params.push(filters.q.trim());
     where.push(`d.search_tsv @@ websearch_to_tsquery('english', $${params.length})`);
+  } else if (filters.dept) {
+    // Browsing a department shows one folder level; a search covers the whole department.
+    params.push(filters.folder ?? null);
+    where.push(`d.folder_id IS NOT DISTINCT FROM $${params.length}::uuid`);
   }
 
   const { rows } = await query<DocumentRow>(
@@ -567,9 +574,17 @@ export async function createDocument(user: AuthUser, formData: FormData) {
       description: z.string().optional(),
       keywords: z.string().optional(),
       department_id: z.string().uuid(),
+      folder_id: z.string().uuid().optional(),
       confidentiality: z.enum(confidentiality).default("public"),
     })
     .parse(Object.fromEntries(formData.entries()));
+  if (parsed.folder_id) {
+    const folder = await query("SELECT 1 FROM folders WHERE id = $1 AND department_id = $2", [
+      parsed.folder_id,
+      parsed.department_id,
+    ]);
+    if (folder.rowCount === 0) throw new ApiError(400, "Folder not found in this department");
+  }
   const viewerIds =
     parsed.confidentiality === "public"
       ? []
@@ -593,13 +608,15 @@ export async function createDocument(user: AuthUser, formData: FormData) {
         `
           INSERT INTO documents (
             title, description, department_id, confidentiality, keywords,
-            status, current_version, owner_id, uploaded_by, published_by, published_at
+            status, current_version, owner_id, uploaded_by, published_by, published_at,
+            folder_id
           )
           VALUES (
             $1, $2, $3, $4, $5,
             $6::doc_status, 1, $7::uuid, $7::uuid,
             CASE WHEN $8::boolean THEN $7::uuid ELSE NULL::uuid END,
-            CASE WHEN $8::boolean THEN now() ELSE NULL::timestamptz END
+            CASE WHEN $8::boolean THEN now() ELSE NULL::timestamptz END,
+            $9::uuid
           )
           RETURNING id
         `,
@@ -612,6 +629,7 @@ export async function createDocument(user: AuthUser, formData: FormData) {
           initialStatus,
           user.id,
           adminUpload,
+          parsed.folder_id ?? null,
         ],
       );
       const documentId = docResult.rows[0].id;
